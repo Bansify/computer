@@ -1,6 +1,6 @@
 # Gothwad Computer — 5-Phase Home Launcher Master Plan
 
-**Status:** Phase 1 implementation started. All checkboxes remain pending until the corresponding automated and real-device evidence is recorded.
+**Status:** Phase 1 and 2 implementation and hardening underway; acceptance gates remain open. All checkboxes remain pending until the corresponding automated and real-device evidence is recorded.
 **Product goal:** Android TV-first, desktop-style Android HOME launcher for TVs and tablets; fully usable with remote/D-pad, touch, physical keyboard and mouse. Built-in apps remain Android Views/WebView features, not Windows executable emulation.
 **Source baseline:** `com.gothwad.computer`, min SDK 21, target/compile SDK 34, Kotlin + XML/ViewBinding. Confirm current files before implementation; this plan is not proof a feature is implemented or tested.
 **Priority:** Prevent user lockout and preserve a recoverable Home first; remote-only usability second; feature breadth and polish after that.
@@ -29,7 +29,7 @@ Implementation + relevant automated tests + device verification + accessibility/
 
 **Outcome:** A testable Android HOME candidate that opens a minimal usable screen even when optional components fail, with a real escape route. Do not recommend it as the user's only Home yet.
 
-**Progress (2026-11-15):** HOME manifest registration, Home settings route, guarded startup, non-destructive config decode, initial crash-count safe screen, a debug-only startup-fault fixture and build-only CI are implemented but not device-verified. Earlier build-only CI passed at `ed62003`; check the latest run for the current commit. Config/icon/wallpaper fault fixtures, real-device checks, performance budgets and full recovery/lock validation remain open. Initial emulator smoke tests and explicit redacted diagnostics sharing have been added; see the latest CI run for status. See [Phase 1 test protocol](docs/PHASE1_TESTING.md).
+**Progress (2026-11-15):** HOME manifest registration, Home settings route, guarded startup, non-destructive config decode, initial crash-count safe screen, a debug-only startup-fault fixture and build-only CI are implemented but not device-verified. Build, unit tests, lint and Android 29 emulator smoke tests passed on `35641ff` ([CI run](https://github.com/GothwadTech/computer/actions/runs/43670030903)); consult latest CI for later changes. Config/icon/wallpaper fault fixtures, real-device checks, performance budgets and full recovery/lock validation remain open. Initial emulator smoke tests and explicit redacted diagnostics sharing have been added; see the latest CI run for status. See [Phase 1 test protocol](docs/PHASE1_TESTING.md).
 
 ### 1A. Reproducible build and baseline
 
@@ -63,7 +63,7 @@ Implementation + relevant automated tests + device verification + accessibility/
 
 **Outcome:** A remote-only user can navigate and recover the entire essential Home experience. Scanning and lifecycle work no longer jeopardize Home stability.
 
-**Progress (2026-11-15):** App scans are serialized with bounded artwork concurrency; package-change refresh, remote focus/flyout handling, Home/Back behavior, sampled wallpaper decode, lifecycle cleanup, memory trimming and Bluetooth/status fallbacks were added. Unit and emulator smoke tests were introduced. Full-screen remote accessibility, OEM/device tests, package-race stress, profiling and phase gates remain unverified; follow [Phase 2 test protocol](docs/PHASE2_TESTING.md).
+**Progress (2026-11-15):** App scans are serialized with bounded artwork concurrency; package-change refresh, remote focus/flyout handling, Home/Back behavior, sampled wallpaper decode, lifecycle cleanup, memory trimming and Bluetooth/status fallbacks were added. Unit and Android 29 emulator smoke tests passed on `35641ff` ([CI run](https://github.com/GothwadTech/computer/actions/runs/43670030903)). Full-screen remote accessibility, OEM/device tests, package-race stress, profiling and phase gates remain unverified; follow [Phase 2 test protocol](docs/PHASE2_TESTING.md).
 
 ### 2A. Focus/navigation contract
 

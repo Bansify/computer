@@ -23,6 +23,6 @@ Do not touch the screen or use a mouse. Check focus is clearly visible from TV v
 
 ## Automation and outstanding gates
 
-- Unit tests exercise bitmap sample-size selection, focus restoration policy, config decoding and startup recovery policy. CI builds debug/release/bundle and runs lint; lint currently does **not** fail the build on every error. Review lint artifacts.
-- The CI emulator job runs instrumentation smoke tests for the HOME intent filter, remote-style Start/Back navigation and recovery screen, provided the emulator job is green. Read its latest run; emulator keyboard injection cannot prove physical remote behavior.
+- Unit tests exercise bitmap sample-size selection, focus restoration policy, config decoding and startup recovery policy. CI builds debug/release/bundle and runs lintDebug with error-aborting enabled; release-build lint remains disabled. Review lint artifacts, including outstanding warnings.
+- [CI run 43670030903](https://github.com/GothwadTech/computer/actions/runs/43670030903) passed for commit `35641ff`: build, unit tests, lintDebug (0 errors, 919 warnings), and Android 29 emulator smoke tests covering HOME registration, Start/Back/focus containment, recovery, concurrent scans and corrupt-image decode. Check the latest run for subsequent changes. Emulator keyboard injection cannot prove physical remote behavior.
 - No exhaustive instrumentation for all screens, package-update races, wallpaper fault injection, ANRs, native crashes, OEM Home behavior or long-run resource stability is claimed yet. Physical TV/tablet input testing, benchmarks and recovery tests are required before Phase 1 or 2 can be marked complete.

@@ -88,7 +88,7 @@ android {
         viewBinding = true
     }
     lint {
-        abortOnError = false
+        abortOnError = true
         checkReleaseBuilds = false
     }
 }

@@ -4,6 +4,8 @@ These checks are **pending** until recorded on real devices. This build is not y
 
 ## Test record
 
+CI evidence: [run 43670030903](https://github.com/GothwadTech/computer/actions/runs/43670030903) passed build, unit tests, lintDebug and Android 29 emulator smoke tests at commit `35641ff`. Lint reported 0 errors and 919 warnings; review these warnings. This is not a device sign-off; check the latest run for later commits.
+
 Record commit/build, build variant/signature, date, device model/OEM, Android version, RAM, installed Home apps, input device and results for each case. Capture steps and limitations without passwords, browsing history or private notifications. A CI build does not replace TV/tablet testing.
 
 ## First install and rollback
