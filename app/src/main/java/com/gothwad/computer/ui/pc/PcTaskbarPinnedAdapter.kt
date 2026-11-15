@@ -100,9 +100,11 @@ class PcTaskbarPinnedAdapter(
             }
 
             // Right click / Context click to unpin
-            binding.root.setOnContextClickListener { v ->
-                onUnpinApp(app, v)
-                true
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                binding.root.setOnContextClickListener { v ->
+                    onUnpinApp(app, v)
+                    true
+                }
             }
 
             // Long press to unpin

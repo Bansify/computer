@@ -22,7 +22,7 @@
             android:layout_height="16dp"
             android:contentDescription="@null"
             android:src="@drawable/ic_win_personalisation"
-            android:tint="#0078D4" />
+            app:tint="#0078D4" />
 
         <TextView
             android:layout_width="0dp"
@@ -41,7 +41,7 @@
             android:background="@drawable/bg_win_btn"
             android:contentDescription="Minimize"
             android:src="@drawable/bg_taskbar_active_indicator"
-            android:tint="#CCCCCC" />
+            app:tint="#CCCCCC" />
 
         <!-- Maximize -->
         <ImageButton
@@ -51,7 +51,7 @@
             android:background="@drawable/bg_win_btn"
             android:contentDescription="Maximize"
             android:src="@drawable/bg_win_btn"
-            android:tint="#CCCCCC" />
+            app:tint="#CCCCCC" />
 
         <!-- Close -->
         <ImageButton
@@ -61,7 +61,7 @@
             android:background="@drawable/bg_win_close_btn"
             android:contentDescription="Close"
             android:src="@drawable/ic_close"
-            android:tint="#FFFFFF" />
+            app:tint="#FFFFFF" />
     </LinearLayout>
 
     <View
@@ -105,7 +105,7 @@
                         android:layout_gravity="center"
                         android:contentDescription="@null"
                         android:src="@drawable/ic_win_accounts"
-                        android:tint="#FFFFFF" />
+                        app:tint="#FFFFFF" />
                 </FrameLayout>
 
                 <LinearLayout
@@ -151,7 +151,7 @@
                     android:layout_height="16dp"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_search"
-                    android:tint="#8E95A5" />
+                    app:tint="#8E95A5" />
 
                 <EditText
                     android:id="@+id/et_search_settings"
