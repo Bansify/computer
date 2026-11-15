@@ -1,6 +1,6 @@
 # Gothwad Computer — 5-Phase Home Launcher Master Plan
 
-**Status:** Planning backlog; all checkboxes are pending unless verified and checked with evidence.
+**Status:** Phase 1 implementation started. All checkboxes remain pending until the corresponding automated and real-device evidence is recorded.
 **Product goal:** Android TV-first, desktop-style Android HOME launcher for TVs and tablets; fully usable with remote/D-pad, touch, physical keyboard and mouse. Built-in apps remain Android Views/WebView features, not Windows executable emulation.
 **Source baseline:** `com.gothwad.computer`, min SDK 21, target/compile SDK 34, Kotlin + XML/ViewBinding. Confirm current files before implementation; this plan is not proof a feature is implemented or tested.
 **Priority:** Prevent user lockout and preserve a recoverable Home first; remote-only usability second; feature breadth and polish after that.
@@ -29,9 +29,11 @@ Implementation + relevant automated tests + device verification + accessibility/
 
 **Outcome:** A testable Android HOME candidate that opens a minimal usable screen even when optional components fail, with a real escape route. Do not recommend it as the user's only Home yet.
 
+**Progress (2026-11-15):** HOME manifest registration, Home settings route, guarded startup, non-destructive config decode, initial crash-count safe screen, a debug-only startup-fault fixture and build-only CI are implemented but not device-verified. Earlier build-only CI passed at `ed62003`; check the latest run for the current commit. Config/icon/wallpaper fault fixtures, device/instrumentation checks, diagnostics export, performance budgets and full recovery/lock validation remain open. See [Phase 1 test protocol](docs/PHASE1_TESTING.md).
+
 ### 1A. Reproducible build and baseline
 
-- [ ] Install/configure JDK 17, Android SDK and tools; validate and pin a supported Gradle/AGP/Kotlin/SDK combination (current wrapper 9.3.1 / AGP 8.5.2 is unverified). Verify wrapper integrity and distribution checksum. Fix `gradlew` executable mode.
+- [ ] Install/configure JDK 17, Android SDK and tools; validate and pin a supported Gradle/AGP/Kotlin/SDK combination (wrapper now 8.7 / AGP 8.5.2; verify current CI and device results). Verify wrapper integrity and distribution checksum. Fix `gradlew` executable mode.
 - [ ] Establish CI on pull requests: clean debug/release builds, unit tests, actionable lint, dependency/wrapper checks; add instrumentation coverage on available emulators. Address lint failures rather than globally suppressing them.
 - [ ] Inventory existing features, permissions, startup path, supported devices/API versions and baseline profile. Before setting numeric budgets, measure cold/warm Home startup, input responsiveness, frame times, memory and crashes on named TV/tablet devices. Record reproducible methods and agree budgets; do not claim historical memory figures without measurement.
 - [ ] Create test fixtures and debug-only fault injection for config, icon, wallpaper, startup and optional service errors. Do not ship destructive fault triggers in production.
