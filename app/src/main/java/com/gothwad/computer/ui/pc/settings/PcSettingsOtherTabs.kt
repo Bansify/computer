@@ -160,19 +160,14 @@ class PcSettingsOtherTabs(
             context = context,
             iconRes = R.drawable.ic_win_system,
             title = "Physical Keyboard Shortcuts",
-            subtitle = "Win key, Alt+Tab, Win+D, Win+E, Win+I, Ctrl+Shift+Esc",
+            subtitle = "Remote navigation and platform key limitations",
             value = "View"
         ) {
             val shortcuts = """
-                • Win Key or Ctrl+Esc : Open / Close Start Menu
-                • Win + D : Show Desktop (Minimize all windows)
-                • Win + E : Open File Explorer
-                • Win + I : Open Settings
-                • Alt + Tab : Switch between open windows
-                • Ctrl + Shift + Esc : Task Manager
-                • Win + L : Lock PC
-                • F11 : Toggle Fullscreen Mode
-                • Esc : Close active flyout or top window
+                Use directional keys to move focus and select to activate.
+                Back closes an open menu or window when supported.
+                Configurable keyboard and remote shortcuts are not available yet.
+                Android or the device may reserve Home and other system keys.
             """.trimIndent()
             PcSettingCardHelper.showInfoDialog(context, "Keyboard Shortcuts Cheatsheet", shortcuts)
         }

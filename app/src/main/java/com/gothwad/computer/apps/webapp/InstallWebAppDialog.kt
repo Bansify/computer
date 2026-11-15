@@ -166,7 +166,7 @@ class InstallWebAppDialog(
 
     private fun triggerAutoFetch(url: String) {
         binding.progressFetchingIcon.visibility = View.VISIBLE
-        binding.tvIconStatus.text = "Fetching website icon..."
+        binding.tvIconStatus.text = "Preparing offline icon..."
 
         lifecycleScope.launch {
             val (fetchedTitle, fetchedIcon) = WebAppManager.fetchFaviconAndTitle(url)

@@ -2,7 +2,6 @@ package com.gothwad.computer.apps.webapp
 
 import android.annotation.SuppressLint
 import android.app.DownloadManager
-import android.content.ClipDescription
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -11,8 +10,6 @@ import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
-import android.util.Base64
-import android.view.DragEvent
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -44,7 +41,6 @@ import com.gothwad.computer.databinding.MenuChromeBrowserBinding
 import com.gothwad.computer.databinding.ViewWebAppBinding
 import com.gothwad.computer.ui.AppIcons
 import java.io.File
-import java.io.FileInputStream
 import java.net.URLEncoder
 
 /**
@@ -53,11 +49,11 @@ import java.net.URLEncoder
  * - Real Chrome Multi-Tab System with Tab Strip, dynamic favicons, titles, and '+' button
  * - Chrome Omnibox with Instant Google Search, SSL status, Bookmark Star, Clear button
  * - Speed Dial / Chrome New Tab Page with search box and quick shortcuts
- * - Chrome 3-Dots Menu: New Tab, Incognito, Bookmarks, History, Downloads, Desktop Site, Find in Page, Share, Install App
+ * - Browser menu: bookmarks, history, downloads and web shortcuts; private mode is unavailable.
  * - In-Page Search ("Find in Page") with active match counter and previous/next navigation
- * - Cross-Window HTML5 Drag and Drop File Injection (drag files from File Manager onto dropzones/inputs!)
+ * - File uploads and file-drop injection are disabled until a safe picker/result flow is implemented.
  * - Shared Web Storage & Cookie Session (Telegram Web, WhatsApp, Discord stay logged in permanently across windows with zero lag)
- * - File Chooser (onShowFileChooser) for website file attachments and photo uploads
+ * - Website camera, microphone and geolocation requests are denied by default.
  * - Fullscreen video playback (HTML5 / YouTube)
  * - 100% Native Android Views & ViewBinding, zero Jetpack Compose.
  */
@@ -170,16 +166,18 @@ class WebAppView(
             builtInZoomControls = true
             displayZoomControls = false
             cacheMode = if (isIncognito) WebSettings.LOAD_NO_CACHE else WebSettings.LOAD_DEFAULT
-            allowFileAccess = true
-            allowContentAccess = true
-            mediaPlaybackRequiresUserGesture = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            allowFileAccess = false
+            allowContentAccess = false
+            allowFileAccessFromFileURLs = false
+            allowUniversalAccessFromFileURLs = false
+            mediaPlaybackRequiresUserGesture = true
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         }
 
         // Shared cookies and sessions
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
-        cookieManager.setAcceptThirdPartyCookies(webView, true)
+        cookieManager.setAcceptThirdPartyCookies(webView, false)
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -258,14 +256,14 @@ class WebAppView(
             }
 
             override fun onPermissionRequest(request: PermissionRequest?) {
-                request?.grant(request.resources)
+                request?.deny()
             }
 
             override fun onGeolocationPermissionsShowPrompt(
                 origin: String?,
                 callback: GeolocationPermissions.Callback?
             ) {
-                callback?.invoke(origin, true, false)
+                callback?.invoke(origin, false, false)
             }
 
             override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
@@ -285,26 +283,10 @@ class WebAppView(
                 filePathCallback: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?
             ): Boolean {
-                fileChooserCallback?.onReceiveValue(null)
-                fileChooserCallback = filePathCallback
-
-                val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
-                    type = "*/*"
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                }
-
-                val activity = getActivity()
-                if (activity != null) {
-                    runCatching {
-                        activity.startActivity(Intent.createChooser(intent, "Select File"))
-                    }.onFailure {
-                        filePathCallback?.onReceiveValue(null)
-                        fileChooserCallback = null
-                        return false
-                    }
-                    return true
-                }
-                return false
+                // This floating browser has no activity-result owner. Never leave the callback pending.
+                filePathCallback?.onReceiveValue(null)
+                Toast.makeText(context, "File uploads are not supported in this browser yet", Toast.LENGTH_SHORT).show()
+                return true
             }
         }
 
@@ -333,8 +315,12 @@ class WebAppView(
     }
 
     fun addNewTab(url: String = "https://www.google.com", isIncognito: Boolean = false) {
+        if (isIncognito) {
+            Toast.makeText(context, "Private browsing is unavailable: WebView sessions are shared", Toast.LENGTH_LONG).show()
+            return
+        }
         val tabId = "tab_${System.currentTimeMillis()}_${tabs.size}"
-        val webView = createTabWebView(isIncognito)
+        val webView = createTabWebView(false)
         val initialTitle = if (url == "chrome://newtab" || url.isEmpty()) "New Tab" else "Loading..."
         val tab = ChromeTab(
             id = tabId,
@@ -682,131 +668,8 @@ class WebAppView(
      * - Injects dropped file to HTML5 drag/drop targets & file inputs via DataTransfer!
      */
     private fun setupDragAndDropListener() {
-        binding.root.setOnDragListener { _, event ->
-            when (event.action) {
-                DragEvent.ACTION_DRAG_STARTED -> {
-                    val hasFile = event.clipDescription?.hasMimeType("application/x-gothwad-file") == true ||
-                        event.clipDescription?.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) == true ||
-                        event.clipDescription?.hasMimeType(ClipDescription.MIMETYPE_TEXT_URILIST) == true
-                    hasFile
-                }
-                DragEvent.ACTION_DRAG_ENTERED -> {
-                    binding.layoutFileDropOverlay.visibility = View.VISIBLE
-                    true
-                }
-                DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> {
-                    binding.layoutFileDropOverlay.visibility = View.GONE
-                    true
-                }
-                DragEvent.ACTION_DROP -> {
-                    binding.layoutFileDropOverlay.visibility = View.GONE
-                    handleDroppedFile(event)
-                    true
-                }
-                else -> true
-            }
-        }
-    }
-
-    private fun handleDroppedFile(event: DragEvent) {
-        val clipData = event.clipData ?: return
-        var filePath: String? = null
-
-        for (i in 0 until clipData.itemCount) {
-            val item = clipData.getItemAt(i)
-            val path = item.text?.toString()
-            if (path != null && File(path).exists()) {
-                filePath = path
-                break
-            }
-            val uri = item.uri
-            if (uri != null) {
-                if (uri.scheme == "file") {
-                    filePath = uri.path
-                    break
-                }
-            }
-        }
-
-        if (filePath == null) return
-        val file = File(filePath)
-        if (!file.exists()) return
-
-        val activeWv = getActiveTab()?.webView ?: return
-        val fileName = file.name
-        val ext = file.extension.lowercase()
-        val mimeType = runCatching {
-            android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
-        }.getOrNull() ?: "application/octet-stream"
-
-        // Inject File into HTML5 DragEvent & File inputs on active web page
-        val dropX = event.x
-        val dropY = event.y
-
-        runCatching {
-            // Read file bytes for base64 injection if file size < 15MB
-            val maxInjectBytes = 15 * 1024 * 1024
-            if (file.length() <= maxInjectBytes) {
-                val bytes = FileInputStream(file).use { it.readBytes() }
-                val base64Data = Base64.encodeToString(bytes, Base64.NO_WRAP)
-
-                val js = """
-                    (function(name, mime, b64, cx, cy) {
-                        try {
-                            const byteChars = atob(b64);
-                            const byteNums = new Array(byteChars.length);
-                            for (let i = 0; i < byteChars.length; i++) {
-                                byteNums[i] = byteChars.charCodeAt(i);
-                            }
-                            const byteArray = new Uint8Array(byteNums);
-                            const fileObj = new File([byteArray], name, { type: mime });
-                            const dt = new DataTransfer();
-                            dt.items.add(fileObj);
-
-                            let target = document.elementFromPoint(cx, cy);
-                            if (!target) target = document.activeElement || document.body;
-
-                            // 1. Try setting file input if present
-                            let input = target.querySelector ? target.querySelector('input[type="file"]') : null;
-                            if (!input && target.tagName === 'INPUT' && target.type === 'file') {
-                                input = target;
-                            }
-                            if (!input) {
-                                input = document.querySelector('input[type="file"]');
-                            }
-                            if (input) {
-                                input.files = dt.files;
-                                input.dispatchEvent(new Event('change', { bubbles: true }));
-                                input.dispatchEvent(new Event('input', { bubbles: true }));
-                            }
-
-                            // 2. Dispatch full HTML5 DragEvent sequence
-                            ['dragenter', 'dragover', 'drop'].forEach(evtName => {
-                                const evt = new DragEvent(evtName, {
-                                    bubbles: true,
-                                    cancelable: true,
-                                    composed: true,
-                                    clientX: cx,
-                                    clientY: cy,
-                                    dataTransfer: dt
-                                });
-                                target.dispatchEvent(evt);
-                            });
-                        } catch(e) {
-                            console.error('File drop injection error:', e);
-                        }
-                    })('${fileName.replace("'", "\\'")}', '$mimeType', '$base64Data', $dropX, $dropY);
-                """.trimIndent()
-
-                activeWv.evaluateJavascript(js) {
-                    Toast.makeText(context, "Dropped '$fileName' to website", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                Toast.makeText(context, "File too large for direct drop ($fileName)", Toast.LENGTH_SHORT).show()
-            }
-        }.onFailure {
-            Toast.makeText(context, "Failed to drop file: ${it.message}", Toast.LENGTH_SHORT).show()
-        }
+        // Do not accept external raw-path drag data or inject file contents into websites.
+        binding.root.setOnDragListener { _, _ -> false }
     }
 
     private fun showChromePopupMenu(anchor: View) {
@@ -844,8 +707,7 @@ class WebAppView(
         // 2. New Incognito Tab
         menuBinding.menuItemIncognito.setOnClickListener {
             popup.dismiss()
-            addNewTab("https://www.google.com", isIncognito = true)
-            Toast.makeText(context, "Opened Incognito Tab", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Private browsing is unavailable: WebView sessions are shared", Toast.LENGTH_LONG).show()
         }
 
         // 3. Bookmarks
