@@ -42,6 +42,7 @@ class GothwadApplication : Application() {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
                 Log.e(TAG, "Uncaught exception on thread ${thread.name}", throwable)
+                com.gothwad.computer.data.StartupRecovery.recordUncaughtStartupCrash(this)
                 logCrashToFile(throwable)
             } catch (e: Exception) {
                 Log.e(TAG, "Error logging crash", e)

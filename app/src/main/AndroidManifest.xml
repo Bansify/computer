@@ -69,6 +69,13 @@
             android:screenOrientation="unspecified"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|density|uiMode">
 
+            <!-- Users choose the default Home in Android's resolver/settings. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
             <!-- Standard App Launcher & Android TV Launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

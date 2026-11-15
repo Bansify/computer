@@ -93,6 +93,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     // iOS-style continuous (squircle) corners via native Drawables — perceptually
     // smoother than the circular-arc RoundedCornerShape.
     implementation("androidx.graphics:graphics-shapes:1.0.1")

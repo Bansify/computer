@@ -394,6 +394,22 @@ class PcSettingsOtherTabs(
             showStartupAppsDialog()
         }
 
+        // Android remains in control of the default Home selection.
+        PcSettingCardHelper.addCard(
+            parent = container,
+            context = context,
+            iconRes = R.drawable.ic_win_system,
+            title = "Default Home app",
+            subtitle = if (com.gothwad.computer.data.HomeSettings.isDefaultHome(context))
+                "Gothwad Computer is the current Home. You can switch back to another launcher."
+            else "Choose a Home app in Android settings; keep another launcher installed.",
+            value = "Open"
+        ) {
+            if (!com.gothwad.computer.data.HomeSettings.open(context)) {
+                Toast.makeText(context, R.string.safe_home_no_settings, Toast.LENGTH_SHORT).show()
+            }
+        }
+
         // Default Apps
         PcSettingCardHelper.addCard(
             parent = container,
