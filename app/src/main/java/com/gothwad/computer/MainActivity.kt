@@ -486,6 +486,11 @@ class MainActivity : AppCompatActivity() {
         return false
     }
 
+    override fun onPause() {
+        handledShortcutKeys.clear()
+        super.onPause()
+    }
+
     override fun onDestroy() {
         handledShortcutKeys.clear()
         runCatching { unregisterReceiver(packageReceiver) }

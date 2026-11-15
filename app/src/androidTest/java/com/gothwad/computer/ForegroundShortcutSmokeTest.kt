@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
+import android.widget.EditText
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -44,6 +46,17 @@ class ForegroundShortcutSmokeTest {
                     assertTrue(activity.dispatchKeyEvent(down))
                     assertEquals(View.VISIBLE, menu.visibility)
                     assertTrue(activity.dispatchKeyEvent(up))
+                    activity.onBackPressedDispatcher.onBackPressed()
+                    assertEquals(View.GONE, menu.visibility)
+                    val root = activity.findViewById<ViewGroup>(android.R.id.content)
+                    val editor = EditText(activity)
+                    root.addView(editor)
+                    editor.requestFocus()
+                    assertTrue(editor.hasFocus())
+                    activity.dispatchKeyEvent(down)
+                    activity.dispatchKeyEvent(up)
+                    assertEquals("Text entry must not trigger launcher shortcuts", View.GONE, menu.visibility)
+                    root.removeView(editor)
                 }
             }
         } finally { store.update { it.copy(foregroundShortcuts = original) } }
