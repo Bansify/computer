@@ -19,7 +19,7 @@ certificates() {
     echo "APK signature verification failed: $output" >&2
     return 1
   fi
-  certs=$(printf '%s\n' "$output" | grep -E '^Signer #[0-9]+ certificate SHA-256 digest:' | sort || true)
+  certs=$(printf '%s\n' "$output" | sed -nE 's/^(Signer #[0-9]+|V[0-9.]+ Signer): certificate SHA-256 digest: ([0-9a-fA-F]+)$/\2/p' | sort -u)
   if [[ -z "$certs" ]]; then
     echo "No signing certificate found; verifier output: $output" >&2
     return 1
