@@ -46,7 +46,9 @@ class DeviceLockViewController(
         container.isFocusable = true
         container.isFocusableInTouchMode = true
         container.setOnTouchListener { _, _ -> true }
-        container.setOnContextClickListener { true }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            container.setOnContextClickListener { true }
+        }
         container.setOnLongClickListener { true }
 
         setupUi()

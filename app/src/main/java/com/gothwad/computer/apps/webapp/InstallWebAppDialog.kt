@@ -135,8 +135,8 @@ class InstallWebAppDialog(
         // Install Button
         binding.btnInstallWebApp.setOnClickListener {
             val url = binding.etWebappUrl.text.toString().trim()
-            if (url.isEmpty()) {
-                Toast.makeText(requireContext(), "Please enter a web app URL", Toast.LENGTH_SHORT).show()
+            if (!WebUrlPolicy.isWebUrl(WebAppManager.formatUrl(url)) || url.isEmpty()) {
+                Toast.makeText(requireContext(), "Please enter a valid HTTP or HTTPS address", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             val title = binding.etWebappTitle.text.toString().trim().ifEmpty {
@@ -166,7 +166,7 @@ class InstallWebAppDialog(
 
     private fun triggerAutoFetch(url: String) {
         binding.progressFetchingIcon.visibility = View.VISIBLE
-        binding.tvIconStatus.text = "Fetching website icon..."
+        binding.tvIconStatus.text = "Preparing offline icon..."
 
         lifecycleScope.launch {
             val (fetchedTitle, fetchedIcon) = WebAppManager.fetchFaviconAndTitle(url)

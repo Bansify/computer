@@ -20,6 +20,7 @@ import com.gothwad.computer.data.LauncherConfig
 import com.gothwad.computer.databinding.DialogPcSettingsBinding
 import com.gothwad.computer.ui.dialogs.PinSetupDialogFragment
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -77,16 +78,30 @@ class PcSettingsDialogFragment : DialogFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupWindowControls()
-        setupSearch()
+        binding.etSearchSettings.isEnabled = false
 
         viewLifecycleOwner.lifecycleScope.launch {
             val store = ConfigStore(requireContext())
-            currentConfig = store.flow.first()
+            currentConfig = try { store.flow.first() }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                dismissAllowingStateLoss()
+                (activity as? com.gothwad.computer.MainActivity)?.onConfigurationUnavailable()
+                return@launch
+            }
 
             binding.tvUserName.text = currentConfig.pcUserName
             initPages()
             setupNavigation()
+            setupSearch()
+            binding.etSearchSettings.isEnabled = true
             showTab(currentTabId)
+            binding.recyclerSettingsNav.post {
+                if (_binding != null && !binding.root.isInTouchMode) {
+                    val selected = PcSettingsConstants.NAV_ITEMS.indexOfFirst { it.id == currentTabId }.coerceAtLeast(0)
+                    binding.recyclerSettingsNav.findViewHolderForAdapterPosition(selected)?.itemView?.requestFocus()
+                }
+            }
         }
     }
 
@@ -94,8 +109,8 @@ class PcSettingsDialogFragment : DialogFragment() {
         super.onStart()
         dialog?.window?.let { win ->
             val dm = resources.displayMetrics
-            val width = (dm.widthPixels * 0.90f).toInt().coerceAtLeast(600).coerceAtMost(1020)
-            val height = (dm.heightPixels * 0.88f).toInt().coerceAtLeast(420).coerceAtMost(700)
+            val width = (dm.widthPixels * 0.90f).toInt().coerceAtLeast(600).coerceAtMost(1020).coerceAtMost(dm.widthPixels)
+            val height = (dm.heightPixels * 0.88f).toInt().coerceAtLeast(420).coerceAtMost(700).coerceAtMost(dm.heightPixels)
             win.setLayout(width, height)
         }
     }
@@ -114,8 +129,8 @@ class PcSettingsDialogFragment : DialogFragment() {
                     win.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                     isMaximized = true
                 } else {
-                    val width = (dm.widthPixels * 0.90f).toInt().coerceAtLeast(600).coerceAtMost(1020)
-                    val height = (dm.heightPixels * 0.88f).toInt().coerceAtLeast(420).coerceAtMost(700)
+                    val width = (dm.widthPixels * 0.90f).toInt().coerceAtLeast(600).coerceAtMost(1020).coerceAtMost(dm.widthPixels)
+                    val height = (dm.heightPixels * 0.88f).toInt().coerceAtLeast(420).coerceAtMost(700).coerceAtMost(dm.heightPixels)
                     win.setLayout(width, height)
                     isMaximized = false
                 }
@@ -137,7 +152,8 @@ class PcSettingsDialogFragment : DialogFragment() {
             context = requireContext(),
             scope = viewLifecycleOwner.lifecycleScope,
             config = currentConfig,
-            onConfigChanged = { cfg -> onConfigChanged(cfg) }
+            onConfigChanged = { cfg -> onConfigChanged(cfg) },
+            onOpenShortcuts = { ShortcutSettingsDialogFragment.create().show(childFragmentManager, "shortcuts") }
         )
 
         otherTabs = PcSettingsOtherTabs(

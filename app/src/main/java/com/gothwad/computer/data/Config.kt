@@ -138,7 +138,9 @@ data class LauncherConfig(
     val pcTouchGamepad: Boolean = false,
     val pcDateFormat: String = "DD/MM/YYYY",
     val pcLanguage: String = "en",
-    // ----- Remote Button Mapping (Phase 5) -----
+    // Separate from legacy buttonMap: no silent migration or overwrite of old settings.
+    val foregroundShortcuts: List<ForegroundShortcut> = emptyList(),
+    // ----- Legacy remote button mapping -----
     val buttonMap: Map<Int, String> = emptyMap(),
     val buttonMapDefaultsApplied: Boolean = false,
 )
@@ -152,23 +154,36 @@ const val LAYOUT_DOCK = 2
 
 private val Context.dataStore by preferencesDataStore(name = "launcher_config")
 
-class ConfigStore(private val context: Context) {
-    private val key = stringPreferencesKey("config_json")
+/** A corrupt config must never be silently replaced: it may contain a device lock. */
+class InvalidLauncherConfigException(cause: Throwable) : Exception("Launcher configuration could not be read", cause)
+
+object LauncherConfigCodec {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    fun decode(raw: String?): LauncherConfig {
+        if (raw == null) return LauncherConfig(launcherMode = MODE_PC)
+        return try {
+            json.decodeFromString<LauncherConfig>(raw)
+        } catch (e: IllegalArgumentException) {
+            throw InvalidLauncherConfigException(e)
+        }
+    }
+
+    fun encode(config: LauncherConfig): String = json.encodeToString(config)
+}
+
+class ConfigStore(private val context: Context) {
+    private val key = stringPreferencesKey("config_json")
+
     val flow: Flow<LauncherConfig> = context.dataStore.data.map { prefs ->
-        prefs[key]?.let {
-            runCatching { json.decodeFromString<LauncherConfig>(it) }.getOrNull()
-        } ?: LauncherConfig(launcherMode = MODE_PC)
+        LauncherConfigCodec.decode(prefs[key])
     }
 
     suspend fun update(transform: (LauncherConfig) -> LauncherConfig) {
         context.dataStore.edit { prefs ->
-            val current = prefs[key]?.let {
-                runCatching { json.decodeFromString<LauncherConfig>(it) }.getOrNull()
-            } ?: LauncherConfig(launcherMode = MODE_PC)
-            val updated = transform(current)
-            prefs[key] = json.encodeToString(updated)
+            // If decoding fails, edit aborts and preserves the existing JSON.
+            val current = LauncherConfigCodec.decode(prefs[key])
+            prefs[key] = LauncherConfigCodec.encode(transform(current))
         }
     }
 

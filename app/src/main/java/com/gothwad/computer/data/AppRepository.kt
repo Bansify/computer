@@ -21,6 +21,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import java.io.File
 
 data class AppEntry(
@@ -67,7 +72,10 @@ object AppRepository {
         "com.moonlight_stream.moonlight" to "games",
     )
 
-    private var memoryCache: List<AppEntry>? = null
+    @Volatile private var memoryCache: List<AppEntry>? = null
+    // Serializes snapshots/cache cleanup; limits bitmap work for low-memory devices.
+    private val scanMutex = Mutex()
+    private val artworkPermits = Semaphore(4)
 
     /**
      * Scans launchable apps. Banners and icons are pre-rasterized and cached to
@@ -77,7 +85,11 @@ object AppRepository {
      * Returns the same List instance if the set of installed packages and their
      * timestamps didn't change, letting downstream collectors skip work.
      */
-    suspend fun scan(context: Context): List<AppEntry> = coroutineScope {
+    suspend fun scan(context: Context): List<AppEntry> = withContext(Dispatchers.IO) {
+        scanMutex.withLock { scanLocked(context.applicationContext) }
+    }
+
+    private suspend fun scanLocked(context: Context): List<AppEntry> = coroutineScope {
         val pm = context.packageManager
         val cacheDir = File(context.cacheDir, "app_art").apply { mkdirs() }
 
@@ -118,17 +130,20 @@ object AppRepository {
             if (valid) return@coroutineScope cached
         }
 
-        val validCacheNames = HashSet<String>(byPkg.size * 2)
+        // Build cache keys before launching workers: no shared mutable set in parallel tasks.
+        val validCacheNames = byPkg.keys.flatMap { pkg ->
+            val stamp = meta[pkg]?.first ?: 0L
+            listOf("${pkg}_b_$stamp.webp", "${pkg}_sq_$stamp.webp")
+        }.toSet()
 
         val entries = byPkg.values.map { ri ->
-            async(Dispatchers.IO) {
+            async(Dispatchers.IO) { artworkPermits.withPermit {
                 val pkg = ri.activityInfo.packageName
                 val (stamp, firstInstall) = meta[pkg] ?: (0L to 0L)
                 val ai = ri.activityInfo
 
                 // Leanback banner (16:9, fixed height 180px is plenty for 1080p/4K TV grids)
                 val bannerName = "${pkg}_b_$stamp.webp"
-                validCacheNames.add(bannerName)
                 val banner = cachedBitmap(cacheDir, bannerName, Bitmap.Config.RGB_565) {
                     runCatching {
                         val d = ai.loadBanner(pm) ?: ai.applicationInfo.loadBanner(pm)
@@ -152,7 +167,6 @@ object AppRepository {
                         renderSquareCurveBitmap(d, 128)
                     }.getOrNull()
                 }
-                if (icon != null) validCacheNames.add(iconName)
                 // Upload textures ahead of first draw so the GPU never stalls mid-frame
                 banner?.prepareToDraw()
                 icon?.prepareToDraw()
@@ -167,7 +181,7 @@ object AppRepository {
                     stamp = stamp,
                     firstInstall = firstInstall,
                 )
-            }
+            } }
         }.awaitAll()
 
         // Drop cache entries for uninstalled or updated apps
@@ -175,7 +189,8 @@ object AppRepository {
             if (f.name !in validCacheNames) runCatching { f.delete() }
         }
         val result = entries.sortedBy { it.label.lowercase() }
-        if (result == memoryCache) return@coroutineScope memoryCache!!
+        val previousCache = memoryCache
+        if (previousCache != null && result == previousCache) return@coroutineScope previousCache
         memoryCache = result
         result
     }
@@ -192,8 +207,13 @@ object AppRepository {
     ): Bitmap? {
         val f = File(dir, name)
         if (f.exists()) {
-            val opts = BitmapFactory.Options().apply { inPreferredConfig = config }
-            BitmapFactory.decodeFile(f.absolutePath, opts)?.let { return it }
+            val width = if (config == Bitmap.Config.RGB_565) 320 else 128
+            val height = if (config == Bitmap.Config.RGB_565) 180 else 128
+            val cached = try { BitmapSampling.decodeFile(f.absolutePath, width, height, config) }
+            catch (e: Exception) { null }
+            catch (e: OutOfMemoryError) { null }
+            if (cached != null) return cached
+            runCatching { f.delete() }
         }
         val bmp = create() ?: return null
         runCatching {

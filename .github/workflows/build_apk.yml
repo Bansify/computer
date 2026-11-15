@@ -1,8 +1,7 @@
 name: Build Signed Release APK & Play Store AAB
 
+# Publishing is deliberate: merging to the default branch must not publish a release.
 on:
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
     inputs:
       version_name:
@@ -34,35 +33,41 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Validate and Prepare Gradle Wrapper
-        run: |
-          if ! unzip -tq "gradle/wrapper/gradle-wrapper.jar" 2>/dev/null; then
-            echo "gradle-wrapper.jar not found or corrupted, restoring valid wrapper jar..."
-            mkdir -p gradle/wrapper
-            curl -sSL "https://raw.githubusercontent.com/gradle/gradle/v9.3.1/gradle/wrapper/gradle-wrapper.jar" -o "gradle/wrapper/gradle-wrapper.jar" || true
-          fi
-          chmod +x ./gradlew
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
 
       - name: Determine Version Code and Name
         id: versioning
+        env:
+          INPUT_VERSION_CODE: ${{ inputs.version_code }}
+          INPUT_VERSION_NAME: ${{ inputs.version_name }}
         run: |
-          if [ -n "${{ inputs.version_code }}" ]; then
-            V_CODE="${{ inputs.version_code }}"
+          if [ -n "$INPUT_VERSION_CODE" ]; then
+            V_CODE="$INPUT_VERSION_CODE"
           else
-            V_CODE=$(( 10 + ${{ github.run_number }} ))
+            V_CODE=$(( 10 + GITHUB_RUN_NUMBER ))
           fi
 
-          if [ -n "${{ inputs.version_name }}" ]; then
-            V_NAME="${{ inputs.version_name }}"
+          if [ -n "$INPUT_VERSION_NAME" ]; then
+            V_NAME="$INPUT_VERSION_NAME"
           else
             # Auto-incrementing version name based on version code
             V_NAME="1.0.${V_CODE}"
           fi
 
+          if ! [[ "$V_CODE" =~ ^[1-9][0-9]{0,9}$ ]] || (( 10#$V_CODE > 2100000000 )); then
+            echo "Invalid Android version code" >&2
+            exit 1
+          fi
+          if ! [[ "$V_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]{0,79}$ ]]; then
+            echo "Invalid version name" >&2
+            exit 1
+          fi
+
           echo "Determined Version Code: $V_CODE"
           echo "Determined Version Name: $V_NAME"
-          echo "v_code=$V_CODE" >> $GITHUB_OUTPUT
-          echo "v_name=$V_NAME" >> $GITHUB_OUTPUT
+          echo "v_code=$V_CODE" >> "$GITHUB_OUTPUT"
+          echo "v_name=$V_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Build Release APK, Debug APK and AAB Bundle with Gradle
         run: |
@@ -95,7 +100,7 @@ jobs:
 
           # 0. Copy Debug APK directly (already signed with debug keystore)
           if [ -n "$DEBUG_APK" ]; then
-            cp "$DEBUG_APK" output_release/GothwadComputer-v${V_NAME}-Debug.apk
+            cp "$DEBUG_APK" "output_release/GothwadComputer-v${V_NAME}-Debug.apk"
             echo "Successfully included Debug APK: output_release/GothwadComputer-v${V_NAME}-Debug.apk"
           fi
 
@@ -128,37 +133,37 @@ jobs:
           echo "Using Keystore Alias: $ACTUAL_ALIAS"
           
           # Find latest zipalign and apksigner dynamically
-          ZIPALIGN=$(find $ANDROID_HOME/build-tools/ -name "zipalign" | sort -V | tail -n 1)
-          APKSIGNER=$(find $ANDROID_HOME/build-tools/ -name "apksigner" | sort -V | tail -n 1)
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools/" -name "zipalign" | sort -V | tail -n 1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools/" -name "apksigner" | sort -V | tail -n 1)
           
           # 1. Sign APK
           if [ -n "$UNSIGNED_APK" ]; then
             UNALIGNED_TEMP="/tmp/unaligned_temp.apk"
             if [ -n "$ZIPALIGN" ]; then
-              $ZIPALIGN -v -p 4 "$UNSIGNED_APK" "$UNALIGNED_TEMP" || cp "$UNSIGNED_APK" "$UNALIGNED_TEMP"
+              "$ZIPALIGN" -v -p 4 "$UNSIGNED_APK" "$UNALIGNED_TEMP" || cp "$UNSIGNED_APK" "$UNALIGNED_TEMP"
             else
               cp "$UNSIGNED_APK" "$UNALIGNED_TEMP"
             fi
             
-            $APKSIGNER sign \
+            "$APKSIGNER" sign \
               --ks "$KS_PATH" \
               --ks-key-alias "$ACTUAL_ALIAS" \
               --ks-pass "pass:$KEYSTORE_PASS" \
               --key-pass "pass:$KEY_PASS" \
-              --out output_release/GothwadComputer-v${V_NAME}-Release.apk \
+              --out "output_release/GothwadComputer-v${V_NAME}-Release.apk" \
               "$UNALIGNED_TEMP"
               
-            $APKSIGNER verify --verbose output_release/GothwadComputer-v${V_NAME}-Release.apk
+            "$APKSIGNER" verify --verbose "output_release/GothwadComputer-v${V_NAME}-Release.apk"
             rm -f "$UNALIGNED_TEMP"
           fi
           
           # 2. Sign Play Store AAB Bundle using jarsigner
           if [ -n "$UNSIGNED_AAB" ]; then
-            cp "$UNSIGNED_AAB" output_release/GothwadComputer-v${V_NAME}-PlayStore.aab
+            cp "$UNSIGNED_AAB" "output_release/GothwadComputer-v${V_NAME}-PlayStore.aab"
             jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
               -keystore "$KS_PATH" \
               -storepass "$KEYSTORE_PASS" -keypass "$KEY_PASS" \
-              output_release/GothwadComputer-v${V_NAME}-PlayStore.aab \
+              "output_release/GothwadComputer-v${V_NAME}-PlayStore.aab" \
               "$ACTUAL_ALIAS"
             echo "Successfully signed Play Store AAB!"
           fi

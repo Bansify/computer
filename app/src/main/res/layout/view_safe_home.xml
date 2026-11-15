@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF111827"
+    android:fillViewport="true">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/safe_home_title"
+            android:textColor="#FFFFFFFF"
+            android:textSize="24sp" />
+        <TextView
+            android:id="@+id/safe_home_message"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textColor="#FFE5E7EB"
+            android:textSize="16sp" />
+        <Button
+            android:id="@+id/safe_retry"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/safe_home_retry" />
+        <Button
+            android:id="@+id/safe_default_home"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/safe_home_default" />
+        <Button
+            android:id="@+id/safe_system_settings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/safe_home_settings" />
+        <Button
+            android:id="@+id/safe_diagnostics"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/safe_home_share_diagnostics" />
+        <TextView
+            android:id="@+id/safe_apps_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/safe_home_apps"
+            android:textColor="#FFFFFFFF"
+            android:textSize="18sp" />
+        <LinearLayout
+            android:id="@+id/safe_apps"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </LinearLayout>
+</ScrollView>

@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.gothwad.computer.databinding.ItemTaskbarWindowChipBinding
 import com.gothwad.computer.databinding.LayoutWindowFrameBinding
 import com.gothwad.computer.ui.AppIcons
+import java.lang.ref.WeakReference
 
 /**
  * Native Android View Window Model.
@@ -103,6 +104,7 @@ class FloatingWindowManager(
 ) {
     private val activeWindows = mutableListOf<FloatingWindow>()
     private var focusedWindowId: String? = null
+    private val returnFocus = mutableMapOf<String, WeakReference<View>>()
     private val chipAdapter: TaskbarWindowAdapter
     var onTaskbarChanged: ((hasWindows: Boolean) -> Unit)? = null
 
@@ -147,6 +149,8 @@ class FloatingWindowManager(
         // If window already open, bring to front / unminimize
         val existing = activeWindows.find { it.id == id }
         if (existing != null) {
+            // Caller already created new content; release it when reusing an existing window.
+            runCatching { onClose?.invoke() }
             if (existing.isMinimized) {
                 restoreWindow(id)
             } else {
@@ -155,6 +159,7 @@ class FloatingWindowManager(
             return existing
         }
 
+        windowContainer.rootView.findFocus()?.let { returnFocus[id] = WeakReference(it) }
         val density = context.resources.displayMetrics.density
         val displayWidth = context.resources.displayMetrics.widthPixels
         val displayHeight = context.resources.displayMetrics.heightPixels
@@ -252,6 +257,7 @@ class FloatingWindowManager(
         activeWindows.add(window)
         bringToFront(id)
         updateTaskbar()
+        if (!windowContainer.isInTouchMode) frameBinding.btnWinClose.requestFocus()
 
         return window
     }
@@ -297,6 +303,7 @@ class FloatingWindowManager(
 
     fun minimizeWindow(id: String) {
         val window = activeWindows.find { it.id == id } ?: return
+        val hadFocus = window.frameBinding?.root?.hasFocus() == true
         window.isMinimized = true
         window.frameBinding?.root?.visibility = View.GONE
 
@@ -309,6 +316,11 @@ class FloatingWindowManager(
             }
         }
         updateTaskbar()
+        if (hadFocus) {
+            val target = activeWindows.lastOrNull { !it.isMinimized }?.frameBinding?.btnWinClose
+                ?: returnFocus[id]?.get()
+            if (target?.isAttachedToWindow == true && target.isShown) target.requestFocus()
+        }
     }
 
     fun restoreWindow(id: String) {
@@ -380,11 +392,13 @@ class FloatingWindowManager(
 
     fun closeWindow(id: String) {
         val window = activeWindows.find { it.id == id } ?: return
+        val hadFocus = window.frameBinding?.root?.hasFocus() == true
         window.frameBinding?.root?.let {
             windowContainer.removeView(it)
         }
-        window.onClose?.invoke()
+        runCatching { window.onClose?.invoke() }
         activeWindows.remove(window)
+        val previousFocus = returnFocus.remove(id)?.get()
 
         if (focusedWindowId == id) {
             val next = activeWindows.lastOrNull { !it.isMinimized }
@@ -394,6 +408,10 @@ class FloatingWindowManager(
             }
         }
         updateTaskbar()
+        if (hadFocus) {
+            val target = activeWindows.lastOrNull { !it.isMinimized }?.frameBinding?.btnWinClose ?: previousFocus
+            if (target?.isAttachedToWindow == true && target.isShown) target.requestFocus()
+        }
     }
 
     fun closeAll() {

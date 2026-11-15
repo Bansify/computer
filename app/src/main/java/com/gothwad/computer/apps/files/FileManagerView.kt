@@ -3,7 +3,6 @@ package com.gothwad.computer.apps.files
 import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.ClipData
-import android.content.ClipDescription
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -261,7 +260,7 @@ class FileManagerView(
         placeView.setOnDragListener { v, event ->
             when (event.action) {
                 DragEvent.ACTION_DRAG_STARTED -> {
-                    event.clipDescription?.hasMimeType("application/x-gothwad-file") == true
+                    event.localState is FileItem
                 }
                 DragEvent.ACTION_DRAG_ENTERED -> {
                     v.setBackgroundResource(R.drawable.bg_file_drop_target)
@@ -273,9 +272,9 @@ class FileManagerView(
                 }
                 DragEvent.ACTION_DROP -> {
                     v.setBackgroundResource(R.drawable.bg_win_btn)
-                    val sourcePath = event.clipData?.getItemAt(0)?.text?.toString()
-                    if (sourcePath != null) {
-                        moveFileOrFolder(File(sourcePath), targetDir)
+                    val source = (event.localState as? FileItem)?.file
+                    if (source != null) {
+                        moveFileOrFolder(source, targetDir)
                     }
                     true
                 }
@@ -377,7 +376,7 @@ class FileManagerView(
             // Breadcrumb segments also accept drop!
             chipBinding.root.setOnDragListener { v, event ->
                 when (event.action) {
-                    DragEvent.ACTION_DRAG_STARTED -> event.clipDescription?.hasMimeType("application/x-gothwad-file") == true
+                    DragEvent.ACTION_DRAG_STARTED -> event.localState is FileItem
                     DragEvent.ACTION_DRAG_ENTERED -> {
                         chipBinding.tvBreadcrumbName.setBackgroundResource(R.drawable.bg_file_drop_target)
                         true
@@ -388,9 +387,9 @@ class FileManagerView(
                     }
                     DragEvent.ACTION_DROP -> {
                         chipBinding.tvBreadcrumbName.setBackgroundResource(R.drawable.bg_win_btn)
-                        val sourcePath = event.clipData?.getItemAt(0)?.text?.toString()
-                        if (sourcePath != null) {
-                            moveFileOrFolder(File(sourcePath), segmentFile)
+                        val source = (event.localState as? FileItem)?.file
+                        if (source != null) {
+                            moveFileOrFolder(source, segmentFile)
                         }
                         true
                     }
@@ -483,29 +482,11 @@ class FileManagerView(
 
     private fun startFileDrag(view: View, item: FileItem) {
         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        val fileUri = Uri.fromFile(item.file)
-        val clipItem = ClipData.Item(fileUri)
-        val ext = item.file.extension.lowercase()
-        val mimeType = runCatching {
-            android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
-        }.getOrNull() ?: "*/*"
-
-        val mimeTypes = arrayOf(
-            "application/x-gothwad-file",
-            ClipDescription.MIMETYPE_TEXT_PLAIN,
-            ClipDescription.MIMETYPE_TEXT_URILIST,
-            mimeType
-        )
-        val clipData = ClipData("FILE_DRAG", mimeTypes, clipItem).apply {
-            addItem(ClipData.Item(item.file.absolutePath))
-        }
+        // In-app only: neither private paths nor file:// URIs should be exposed to other apps.
+        val clipData = ClipData.newPlainText("FILE_DRAG", item.file.name)
         val shadow = View.DragShadowBuilder(view)
         binding.tvDragDropHint.visibility = View.VISIBLE
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ
-        } else {
-            0
-        }
+        val flags = 0
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             view.startDragAndDrop(clipData, shadow, item, flags)
         } else {
@@ -518,40 +499,14 @@ class FileManagerView(
         binding.tvDragDropHint.visibility = View.GONE
         if (!source.exists() || !targetDir.exists() || !targetDir.isDirectory) return
 
-        if (source.parentFile?.canonicalPath == targetDir.canonicalPath) {
-            Toast.makeText(context, "'${source.name}' is already in '${targetDir.name}'", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (source.isDirectory && targetDir.canonicalPath.startsWith(source.canonicalPath)) {
-            Toast.makeText(context, "Cannot move a folder into its own subfolder", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        var destFile = File(targetDir, source.name)
-        if (destFile.exists()) {
-            destFile = File(targetDir, "Copy_${System.currentTimeMillis() % 1000}_${source.name}")
-        }
-
-        val success = if (source.renameTo(destFile)) {
-            true
-        } else {
-            runCatching {
-                if (source.isDirectory) {
-                    source.copyRecursively(destFile, overwrite = true)
-                    source.deleteRecursively()
-                } else {
-                    source.copyTo(destFile, overwrite = true)
-                    source.delete()
-                }
-            }.isSuccess
-        }
+        // Cross-filesystem copy/delete is intentionally unsupported to preserve the source on failure.
+        val success = SafeFileMove.move(source, targetDir)
 
         if (success) {
             Toast.makeText(context, "Moved '${source.name}' to '${targetDir.name}'", Toast.LENGTH_SHORT).show()
             refresh()
         } else {
-            Toast.makeText(context, "Could not move '${source.name}'", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Move failed: destination exists, is invalid, or is on another filesystem. Original retained.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -606,11 +561,7 @@ class FileManagerView(
             val extension = MimeTypeMap.getFileExtensionFromUrl(file.absolutePath)
             val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.lowercase()) ?: "*/*"
 
-            val uri = runCatching {
-                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-            }.getOrElse {
-                Uri.fromFile(file)
-            }
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, mime)
@@ -711,7 +662,7 @@ class FileManagerView(
                     b.root.setOnDragListener { v, event ->
                         when (event.action) {
                             DragEvent.ACTION_DRAG_STARTED -> {
-                                event.clipDescription?.hasMimeType("application/x-gothwad-file") == true
+                                event.localState is FileItem
                             }
                             DragEvent.ACTION_DRAG_ENTERED -> {
                                 v.setBackgroundResource(R.drawable.bg_file_drop_target)
@@ -723,9 +674,9 @@ class FileManagerView(
                             }
                             DragEvent.ACTION_DROP -> {
                                 v.setBackgroundResource(R.drawable.bg_win_btn)
-                                val sourcePath = event.clipData?.getItemAt(0)?.text?.toString()
-                                if (sourcePath != null) {
-                                    onItemDropped(File(sourcePath), item.file)
+                                val source = (event.localState as? FileItem)?.file
+                                if (source != null) {
+                                    onItemDropped(source, item.file)
                                 }
                                 true
                             }
@@ -763,7 +714,7 @@ class FileManagerView(
                     b.root.setOnDragListener { v, event ->
                         when (event.action) {
                             DragEvent.ACTION_DRAG_STARTED -> {
-                                event.clipDescription?.hasMimeType("application/x-gothwad-file") == true
+                                event.localState is FileItem
                             }
                             DragEvent.ACTION_DRAG_ENTERED -> {
                                 v.setBackgroundResource(R.drawable.bg_file_drop_target)
@@ -775,9 +726,9 @@ class FileManagerView(
                             }
                             DragEvent.ACTION_DROP -> {
                                 v.setBackgroundResource(R.drawable.bg_win_btn)
-                                val sourcePath = event.clipData?.getItemAt(0)?.text?.toString()
-                                if (sourcePath != null) {
-                                    onItemDropped(File(sourcePath), item.file)
+                                val source = (event.localState as? FileItem)?.file
+                                if (source != null) {
+                                    onItemDropped(source, item.file)
                                 }
                                 true
                             }

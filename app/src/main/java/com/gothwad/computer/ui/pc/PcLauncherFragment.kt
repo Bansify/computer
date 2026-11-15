@@ -40,6 +40,8 @@ import com.gothwad.computer.data.AppEntry
 import com.gothwad.computer.data.AppRepository
 import com.gothwad.computer.data.ConfigStore
 import com.gothwad.computer.data.LauncherConfig
+import com.gothwad.computer.data.LockCredential
+import com.gothwad.computer.data.LaunchAuthorization
 import com.gothwad.computer.data.networkStatusFlow
 import com.gothwad.computer.databinding.FragmentPcLauncherBinding
 import com.gothwad.computer.databinding.LayoutPcAppContextMenuBinding
@@ -66,8 +68,13 @@ import android.graphics.drawable.Drawable
 import com.gothwad.computer.service.FloatingTaskbarService
 import com.gothwad.computer.ui.view.SmoothOutlineProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -92,6 +99,19 @@ class PcLauncherFragment : Fragment() {
     private var activePopupWindow: PopupWindow? = null
     private var floatingWindowManager: FloatingWindowManager? = null
     private var isTaskbarUserHidden: Boolean = false
+    private var flyoutReturnFocus: View? = null
+    private var wallpaperJob: Job? = null
+    private var refreshJob: Job? = null
+    private val appLoadMutex = Mutex()
+    private val attemptedPwaIcons = mutableSetOf<String>()
+    private var packageReceiverRegistered = false
+    private var batteryReceiverRegistered = false
+
+    private val packageReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            requestAppsRefresh()
+        }
+    }
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -117,6 +137,12 @@ class PcLauncherFragment : Fragment() {
         observeData()
         startClockUpdates()
         registerStatusListeners()
+        registerPackageListener()
+        binding.btnStart.post {
+            if (_binding != null && !binding.root.isInTouchMode && binding.root.findFocus() == null) {
+                binding.btnStart.requestFocus()
+            }
+        }
 
         binding.recyclerDesktopGrid.post {
             if (_binding != null) {
@@ -127,8 +153,29 @@ class PcLauncherFragment : Fragment() {
 
     private fun registerStatusListeners() {
         val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-        val stickyIntent = requireContext().registerReceiver(batteryReceiver, filter)
+        val stickyIntent = runCatching {
+            requireContext().registerReceiver(batteryReceiver, filter).also { batteryReceiverRegistered = true }
+        }.getOrNull()
         updateBatteryStatus(stickyIntent)
+    }
+
+    private fun registerPackageListener() {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_CHANGED)
+            addDataScheme("package")
+        }
+        runCatching {
+            ContextCompat.registerReceiver(requireContext(), packageReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+            packageReceiverRegistered = true
+        }
+    }
+
+    private fun requestAppsRefresh() {
+        if (_binding == null) return
+        refreshJob?.cancel()
+        refreshJob = viewLifecycleOwner.lifecycleScope.launch { loadApps() }
     }
 
     private fun updateBatteryStatus(intent: Intent?) {
@@ -194,13 +241,13 @@ class PcLauncherFragment : Fragment() {
         // File Manager Direct Taskbar Shortcut
         binding.btnTaskbarFiles.setOnClickListener {
             closeAllFlyouts()
-            openFileManagerWindow()
+            launchKnownApp("com.gothwad.computer.files")
         }
 
         // Web Browser Direct Taskbar Shortcut
         binding.btnTaskbarBrowser.setOnClickListener {
             closeAllFlyouts()
-            openWebAppWindow()
+            launchKnownApp("com.gothwad.computer.webapp")
         }
 
         // Notifications Button
@@ -277,13 +324,12 @@ class PcLauncherFragment : Fragment() {
         }
 
         // Handle Back button gracefully for normal PC emulator app
-        var lastBackPressTime = 0L
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (binding.containerStartMenu.visibility == View.VISIBLE ||
                     binding.containerQuickSettings.visibility == View.VISIBLE ||
                     activePopupWindow?.isShowing == true) {
-                    closeAllFlyouts()
+                    closeAllFlyouts(restoreFocus = true)
                     return
                 }
 
@@ -293,13 +339,9 @@ class PcLauncherFragment : Fragment() {
                     return
                 }
 
-                val currentTime = System.currentTimeMillis()
-                if (currentTime - lastBackPressTime < 2000L) {
-                    requireActivity().finish()
-                } else {
-                    lastBackPressTime = currentTime
-                    Toast.makeText(requireContext(), "Press BACK again to exit", Toast.LENGTH_SHORT).show()
-                }
+                // A Home app should not finish and leave the user with an empty screen.
+                if (binding.btnStart.isShown) binding.btnStart.requestFocus()
+                else binding.btnFloatingCornerTab.requestFocus()
             }
         })
 
@@ -401,9 +443,10 @@ class PcLauncherFragment : Fragment() {
         qsBinding.imgQsWifi.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_WIFI, 0xFF8AB4F8.toInt()))
 
         // Volume control
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-        val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val maxVol = runCatching { audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 1 }.getOrDefault(1).coerceAtLeast(1)
+        val currentVol = runCatching { audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0 }.getOrDefault(0)
+        qsBinding.seekbarVolume.isEnabled = audioManager != null
         val volPct = (currentVol * 100 / maxVol)
 
         qsBinding.seekbarVolume.max = maxVol
@@ -413,7 +456,7 @@ class PcLauncherFragment : Fragment() {
         qsBinding.seekbarVolume.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, progress, 0)
+                    runCatching { audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, progress, 0) }
                     val newPct = (progress * 100 / maxVol)
                     qsBinding.tvVolumePct.text = "$newPct%"
                 }
@@ -454,9 +497,10 @@ class PcLauncherFragment : Fragment() {
             return
         }
         if (binding.containerStartMenu.visibility == View.VISIBLE) {
-            binding.containerStartMenu.visibility = View.GONE
+            closeAllFlyouts(restoreFocus = true)
         } else {
             closeAllFlyouts()
+            flyoutReturnFocus = binding.root.findFocus()
             binding.containerStartMenu.alpha = 0f
             binding.containerStartMenu.translationY = 20f
             binding.containerStartMenu.visibility = View.VISIBLE
@@ -465,6 +509,7 @@ class PcLauncherFragment : Fragment() {
                 .translationY(0f)
                 .setDuration(160)
                 .start()
+            binding.viewStartMenu.startSearchContainer.requestFocus()
         }
     }
 
@@ -473,9 +518,10 @@ class PcLauncherFragment : Fragment() {
             return
         }
         if (binding.containerQuickSettings.visibility == View.VISIBLE) {
-            binding.containerQuickSettings.visibility = View.GONE
+            closeAllFlyouts(restoreFocus = true)
         } else {
             closeAllFlyouts()
+            flyoutReturnFocus = binding.root.findFocus()
             binding.containerQuickSettings.alpha = 0f
             binding.containerQuickSettings.translationY = 20f
             binding.containerQuickSettings.visibility = View.VISIBLE
@@ -484,14 +530,31 @@ class PcLauncherFragment : Fragment() {
                 .translationY(0f)
                 .setDuration(160)
                 .start()
+            binding.viewQuickSettings.tileQsWifi.requestFocus()
         }
     }
 
-    private fun closeAllFlyouts() {
+    private fun closeAllFlyouts(restoreFocus: Boolean = false) {
+        val previousFocus = flyoutReturnFocus
+        flyoutReturnFocus = null
         activePopupWindow?.dismiss()
         activePopupWindow = null
         binding.containerStartMenu.visibility = View.GONE
         binding.containerQuickSettings.visibility = View.GONE
+        if (restoreFocus && previousFocus?.isAttachedToWindow == true && previousFocus.isShown) {
+            previousFocus.requestFocus()
+        }
+    }
+
+    /** Home press minimizes in-app windows, dismisses flyouts and returns to a visible focus. */
+    fun returnToDesktop() {
+        if (_binding == null) return
+        closeAllFlyouts()
+        floatingWindowManager?.getActiveWindows()?.filter { !it.isMinimized }?.forEach {
+            floatingWindowManager?.minimizeWindow(it.id)
+        }
+        if (binding.btnStart.isShown) binding.btnStart.requestFocus()
+        else binding.btnFloatingCornerTab.requestFocus()
     }
 
     private fun toggleTaskbarVisibility() {
@@ -613,6 +676,7 @@ class PcLauncherFragment : Fragment() {
         binding.recyclerDesktopGrid.setOnTouchListener(desktopTouchListener)
         binding.pcLauncherRoot.setOnTouchListener(desktopTouchListener)
 
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
         val desktopContextClickListener = View.OnContextClickListener {
             if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) {
                 return@OnContextClickListener true
@@ -624,6 +688,7 @@ class PcLauncherFragment : Fragment() {
 
         binding.recyclerDesktopGrid.setOnContextClickListener(desktopContextClickListener)
         binding.pcLauncherRoot.setOnContextClickListener(desktopContextClickListener)
+        }
 
         val desktopLongClickListener = View.OnLongClickListener {
             if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) {
@@ -840,6 +905,11 @@ class PcLauncherFragment : Fragment() {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         }
         activePopupWindow = popup
+        val returnFocus = binding.root.findFocus()
+        popup.setOnDismissListener {
+            if (activePopupWindow === popup) activePopupWindow = null
+            if (returnFocus?.isAttachedToWindow == true && returnFocus.isShown) returnFocus.requestFocus()
+        }
 
         // 1. PC UI Scale Option
         menuBinding.itemPcUiScale.setOnClickListener {
@@ -890,13 +960,13 @@ class PcLauncherFragment : Fragment() {
         // Open File Manager Window
         menuBinding.itemOpenFileManager.setOnClickListener {
             popup.dismiss()
-            openFileManagerWindow()
+            launchKnownApp("com.gothwad.computer.files")
         }
 
         // Open Web App Browser Window
         menuBinding.itemOpenWebApp.setOnClickListener {
             popup.dismiss()
-            openWebAppWindow()
+            launchKnownApp("com.gothwad.computer.webapp")
         }
 
         // Install Web App to Desktop
@@ -924,6 +994,7 @@ class PcLauncherFragment : Fragment() {
         }
 
         showPopupAtSafeCoords(popup, touchX, touchY, (260 * resources.displayMetrics.density).toInt(), (360 * resources.displayMetrics.density).toInt())
+        menuBinding.itemPcUiScale.requestFocus()
     }
 
     // Windows / Linux style App Icon Context Menu
@@ -969,6 +1040,10 @@ class PcLauncherFragment : Fragment() {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         }
         activePopupWindow = popup
+        popup.setOnDismissListener {
+            if (activePopupWindow === popup) activePopupWindow = null
+            if (view.isAttachedToWindow && view.isShown) view.requestFocus()
+        }
 
         menuBinding.itemAppOpen.setOnClickListener {
             popup.dismiss()
@@ -1050,6 +1125,7 @@ class PcLauncherFragment : Fragment() {
         }
 
         showPopupAtSafeCoords(popup, touchX, touchY, (220 * resources.displayMetrics.density).toInt(), (320 * resources.displayMetrics.density).toInt())
+        menuBinding.itemAppOpen.requestFocus()
     }
 
     private fun showPopupAtSafeCoords(popup: PopupWindow, rawX: Float, rawY: Float, widthPx: Int, heightPx: Int) {
@@ -1060,8 +1136,8 @@ class PcLauncherFragment : Fragment() {
         val x = if (rawX > 0) rawX.toInt() else (screenWidth / 2 - widthPx / 2)
         val y = if (rawY > 0) rawY.toInt() else (screenHeight / 2 - heightPx / 2)
 
-        val safeX = x.coerceIn(8, screenWidth - widthPx - 8)
-        val safeY = y.coerceIn(8, screenHeight - heightPx - 48)
+        val safeX = x.coerceIn(8, (screenWidth - widthPx - 8).coerceAtLeast(8))
+        val safeY = y.coerceIn(8, (screenHeight - heightPx - 48).coerceAtLeast(8))
 
         popup.showAtLocation(binding.pcLauncherRoot, Gravity.NO_GRAVITY, safeX, safeY)
     }
@@ -1218,46 +1294,43 @@ class PcLauncherFragment : Fragment() {
         )
     }
 
-    private fun handleAppLaunch(app: AppEntry, skipLock: Boolean = false) {
-        if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) {
-            return
-        }
+    private fun launchKnownApp(pkg: String) {
+        val app = allApps.firstOrNull { it.pkg == pkg }
+        if (app != null) handleAppLaunch(app)
+        else Toast.makeText(requireContext(), "App list is still loading", Toast.LENGTH_SHORT).show()
+    }
 
-        // Intercept dedicated built-in apps for floating window display
-        if (app.pkg == "com.gothwad.computer.files") {
-            openFileManagerWindow()
-            return
+    private fun handleAppLaunch(app: AppEntry, authorized: LockCredential? = null) {
+        if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) return
+        // Check before built-in or web shortcuts as well as installed packages.
+        when (LaunchAuthorization.decide(currentConfig, app.pkg, authorized)) {
+            LaunchAuthorization.Decision.INVALID_CREDENTIAL -> {
+                Toast.makeText(requireContext(), "App lock configuration is incomplete; open lock settings", Toast.LENGTH_LONG).show()
+                return
+            }
+            LaunchAuthorization.Decision.CHALLENGE -> {
+                val credential = currentConfig.appLock
+                PinEntryDialogFragment.newInstance(
+                    title = "App Locked",
+                    subtitle = "Enter PIN/Password to launch ${app.label}",
+                    credential = credential,
+                    isCancelable = true,
+                    onSuccess = { handleAppLaunch(app, authorized = credential) }
+                ).show(parentFragmentManager, PinEntryDialogFragment.TAG)
+                return
+            }
+            LaunchAuthorization.Decision.ALLOW -> Unit
         }
-        if (app.pkg == "com.gothwad.computer.store") {
-            openStoreWindow()
-            return
-        }
-        if (app.pkg == "com.gothwad.computer.webapp" || app.pkg.startsWith("pwa://")) {
-            val isPwa = app.pkg.startsWith("pwa://")
-            val url = if (isPwa) app.pkg.removePrefix("pwa://") else "https://www.google.com"
-            val iconDrawable = if (app.icon != null) BitmapDrawable(resources, app.icon) else null
-            openWebAppWindow(
-                initialUrl = url,
-                title = app.label,
-                customIconDrawable = iconDrawable,
-                isStandalone = isPwa
-            )
-            return
-        }
-
-        // UX in-launcher app lock check
-        if (!skipLock && currentConfig.appLock.enabled && currentConfig.appLock.value.isNotEmpty() && app.pkg in currentConfig.lockedApps) {
-            PinEntryDialogFragment.newInstance(
-                title = "App Locked",
-                subtitle = "Enter PIN/Password to launch ${app.label}",
-                credential = currentConfig.appLock,
-                isCancelable = true,
-                onSuccess = {
-                    handleAppLaunch(app, skipLock = true)
-                }
-            ).show(parentFragmentManager, PinEntryDialogFragment.TAG)
-        } else {
-            Actions.launchApp(requireContext(), app.pkg)
+        when {
+            app.pkg == "com.gothwad.computer.files" -> openFileManagerWindow()
+            app.pkg == "com.gothwad.computer.store" -> openStoreWindow()
+            app.pkg == "com.gothwad.computer.webapp" || app.pkg.startsWith("pwa://") -> {
+                val isPwa = app.pkg.startsWith("pwa://")
+                val url = if (isPwa) app.pkg.removePrefix("pwa://") else "https://www.google.com"
+                val iconDrawable = app.icon?.let { BitmapDrawable(resources, it) }
+                openWebAppWindow(initialUrl = url, title = app.label, customIconDrawable = iconDrawable, isStandalone = isPwa)
+            }
+            else -> Actions.launchApp(requireContext(), app.pkg)
         }
     }
 
@@ -1285,13 +1358,7 @@ class PcLauncherFragment : Fragment() {
                     loadApps()
                 }
             },
-            onOpenWebApp = { url, title ->
-                openWebAppWindow(
-                    initialUrl = url,
-                    title = title,
-                    isStandalone = true
-                )
-            }
+            onOpenWebApp = { url, _ -> launchKnownApp("pwa://$url") }
         )
 
         val windowIcon = ContextCompat.getDrawable(requireContext(), R.drawable.ic_win_store)
@@ -1322,16 +1389,8 @@ class PcLauncherFragment : Fragment() {
             context = requireContext(),
             initialUrl = initialUrl,
             isStandaloneWebApp = isStandalone,
-            onPinShortcut = { siteTitle, siteUrl, iconBmp ->
-                viewLifecycleOwner.lifecycleScope.launch {
-                    WebAppManager.installWebApp(
-                        context = requireContext(),
-                        url = siteUrl,
-                        title = siteTitle,
-                        icon = iconBmp
-                    )
-                    loadApps()
-                }
+            onPinShortcut = {
+                viewLifecycleOwner.lifecycleScope.launch { loadApps() }
             }
         )
 
@@ -1372,6 +1431,18 @@ class PcLauncherFragment : Fragment() {
         } catch (_: Exception) {}
     }
 
+    /** Only while desktop is active; never intercept keys in a floating window or popup. */
+    fun handleForegroundShortcut(action: String): Boolean {
+        if (_binding == null || floatingWindowManager?.hasOpenWindows() == true || activePopupWindow?.isShowing == true) return false
+        when (action) {
+            com.gothwad.computer.data.ForegroundShortcuts.START -> toggleStartMenu()
+            com.gothwad.computer.data.ForegroundShortcuts.SEARCH -> { closeAllFlyouts(); openSearchDialog() }
+            com.gothwad.computer.data.ForegroundShortcuts.QUICK_SETTINGS -> toggleQuickSettings()
+            else -> return false
+        }
+        return true
+    }
+
     private fun openSearchDialog() {
         if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) {
             return
@@ -1399,13 +1470,21 @@ class PcLauncherFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    configStore.flow.collectLatest { config ->
+                    configStore.flow.catch { error ->
+                        if (error is CancellationException) throw error
+                        (activity as? com.gothwad.computer.MainActivity)?.onConfigurationUnavailable()
+                    }.collectLatest { config ->
                         val prevConfig = currentConfig
                         currentConfig = config
                         applyWallpaper()
                         updateGridDimensions()
                         updateVisibleApps()
                         updatePinnedApps()
+                        val previousWebApps = (prevConfig.pcCustomLabels.keys + prevConfig.pcDesktopOrder).filter { it.startsWith("pwa://") }.toSet()
+                        val currentWebApps = (config.pcCustomLabels.keys + config.pcDesktopOrder).filter { it.startsWith("pwa://") }.toSet()
+                        if (previousWebApps != currentWebApps || prevConfig.pcCustomLabels != config.pcCustomLabels) {
+                            requestAppsRefresh()
+                        }
 
                         binding.btnSearch.visibility = if (config.pcShowTaskbarSearch) View.VISIBLE else View.GONE
 
@@ -1458,27 +1537,32 @@ class PcLauncherFragment : Fragment() {
     }
 
     private fun applyWallpaper() {
-        lifecycleScope.launch {
-            if (currentConfig.pcUseCustomWallpaper) {
-                val file = File(requireContext().filesDir, "wallpaper_pc.jpg")
-                val fallbackFile = File(requireContext().filesDir, "wallpaper.jpg")
-                val target = if (file.exists()) file else fallbackFile
-                if (target.exists()) {
-                    val bmp = withContext(Dispatchers.IO) {
-                        BitmapFactory.decodeFile(target.absolutePath)
-                    }
-                    if (bmp != null) {
-                        binding.imgWallpaper.setImageBitmap(bmp)
-                        binding.imgWallpaper.visibility = View.VISIBLE
-                        return@launch
-                    }
+        wallpaperJob?.cancel()
+        val config = currentConfig
+        val context = context ?: return
+        val width = resources.displayMetrics.widthPixels.coerceIn(1, 3840)
+        val height = resources.displayMetrics.heightPixels.coerceIn(1, 2160)
+        val presetId = PC_WALLPAPERS[config.pcWallpaper.coerceIn(0, PC_WALLPAPERS.size - 1)].resId
+        wallpaperJob = viewLifecycleOwner.lifecycleScope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                try {
+                    val custom = if (config.pcUseCustomWallpaper) {
+                        val file = File(context.filesDir, "wallpaper_pc.jpg")
+                        val fallback = File(context.filesDir, "wallpaper.jpg")
+                        val target = if (file.exists()) file else fallback
+                        if (target.exists()) com.gothwad.computer.data.BitmapSampling.decodeFile(target.absolutePath, width, height) else null
+                    } else null
+                    custom ?: com.gothwad.computer.data.BitmapSampling.decodeResource(context.resources, presetId, width, height)
+                } catch (e: Exception) {
+                    null
+                } catch (e: OutOfMemoryError) {
+                    null
                 }
             }
-
-            val idx = currentConfig.pcWallpaper.coerceIn(0, PC_WALLPAPERS.size - 1)
-            val preset = PC_WALLPAPERS[idx]
-            binding.imgWallpaper.setImageResource(preset.resId)
-            binding.imgWallpaper.visibility = View.VISIBLE
+            val currentBinding = _binding ?: return@launch
+            currentBinding.imgWallpaper.setImageBitmap(bitmap)
+            currentBinding.imgWallpaper.visibility = if (bitmap == null) View.GONE else View.VISIBLE
+            // The root's solid black background remains usable if decoding failed.
         }
     }
 
@@ -1509,7 +1593,19 @@ class PcLauncherFragment : Fragment() {
     }
 
     private suspend fun loadApps() {
-        val scanned = AppRepository.scan(requireContext()).toMutableList()
+        try {
+            appLoadMutex.withLock { loadAppsInternal() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("PcLauncher", "Unable to update app list")
+        }
+    }
+
+    private suspend fun loadAppsInternal() {
+        val scanned = try { AppRepository.scan(requireContext()).toMutableList() }
+        catch (e: CancellationException) { throw e }
+        catch (e: Exception) { mutableListOf() }
 
         val ctx = requireContext()
         val filesIcon = ContextCompat.getDrawable(ctx, R.drawable.ic_taskbar_files)?.toBitmap(96, 96)
@@ -1527,8 +1623,8 @@ class PcLauncherFragment : Fragment() {
                     icon = filesIcon,
                     autoCategory = "productivity",
                     tile = 0xFF4FA7FA.toInt(),
-                    stamp = System.currentTimeMillis(),
-                    firstInstall = System.currentTimeMillis()
+                    stamp = 0L,
+                    firstInstall = 0L
                 )
             )
         }
@@ -1542,8 +1638,8 @@ class PcLauncherFragment : Fragment() {
                     icon = browserIcon,
                     autoCategory = "apps",
                     tile = 0xFF60A5FA.toInt(),
-                    stamp = System.currentTimeMillis(),
-                    firstInstall = System.currentTimeMillis()
+                    stamp = 0L,
+                    firstInstall = 0L
                 )
             )
         }
@@ -1557,8 +1653,8 @@ class PcLauncherFragment : Fragment() {
                     icon = storeIcon,
                     autoCategory = "apps",
                     tile = 0xFF0078D4.toInt(),
-                    stamp = System.currentTimeMillis(),
-                    firstInstall = System.currentTimeMillis()
+                    stamp = 0L,
+                    firstInstall = 0L
                 )
             )
         }
@@ -1568,11 +1664,13 @@ class PcLauncherFragment : Fragment() {
         for (pkg in pwaPkgs) {
             if (scanned.none { it.pkg == pkg }) {
                 val label = currentConfig.pcCustomLabels[pkg] ?: WebAppManager.formatUrl(pkg.removePrefix("pwa://")).removePrefix("https://").removePrefix("http://")
-                val iconBmp = WebAppManager.loadSavedIcon(ctx, pkg)
-                    ?: WebAppManager.generateFallbackSquircleIcon(label)
+                val iconBmp = withContext(Dispatchers.IO) {
+                    runCatching { WebAppManager.loadSavedIcon(ctx, pkg) }.getOrNull()
+                        ?: WebAppManager.generateFallbackSquircleIcon(label)
+                }
 
                 // Auto-fetch real icon in background if missing
-                if (!WebAppManager.hasSavedIcon(ctx, pkg)) {
+                if (!WebAppManager.hasSavedIcon(ctx, pkg) && attemptedPwaIcons.add(pkg)) {
                     val rawUrl = pkg.removePrefix("pwa://")
                     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                         val (_, fetched) = WebAppManager.fetchFaviconAndTitle(rawUrl)
@@ -1593,8 +1691,8 @@ class PcLauncherFragment : Fragment() {
                         icon = iconBmp,
                         autoCategory = "apps",
                         tile = 0xFF0284C7.toInt(),
-                        stamp = System.currentTimeMillis(),
-                        firstInstall = System.currentTimeMillis()
+                        stamp = 0L,
+                        firstInstall = 0L
                     )
                 )
             }
@@ -1619,7 +1717,31 @@ class PcLauncherFragment : Fragment() {
             visible
         }
 
+        val grid = binding.recyclerDesktopGrid
+        val focusedItem = grid.focusedChild
+        val oldPosition = focusedItem?.let { grid.getChildAdapterPosition(it) } ?: RecyclerView.NO_POSITION
+        val oldPackage = desktopAdapter?.getCurrentList()?.getOrNull(oldPosition)?.pkg
         desktopAdapter?.updateData(sorted, currentConfig)
+        startMenuAdapter?.submitList(visible)
+        if (oldPosition != RecyclerView.NO_POSITION) {
+            val target = FocusRestorePolicy.position(sorted.map { it.pkg }, oldPackage, oldPosition)
+            grid.post {
+                if (_binding != null && (grid.hasFocus() || binding.root.findFocus() == null)) {
+                    if (target == null) binding.btnStart.requestFocus()
+                    else {
+                        val targetView = grid.findViewHolderForAdapterPosition(target)?.itemView
+                        if (targetView == null) {
+                            grid.scrollToPosition(target)
+                            grid.post {
+                                if (_binding != null && (grid.hasFocus() || binding.root.findFocus() == null)) {
+                                    grid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                                }
+                            }
+                        } else targetView.requestFocus()
+                    }
+                }
+            }
+        }
     }
 
     private fun getAvailableTaskbarPinnedWidth(): Int {
@@ -1663,15 +1785,25 @@ class PcLauncherFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (currentConfig.pcOverlayTaskbarEnabled && FloatingTaskbarService.canDrawOverlays(requireContext())) {
-            FloatingTaskbarService.startIfEnabled(requireContext())
+        runCatching {
+            if (currentConfig.pcOverlayTaskbarEnabled && FloatingTaskbarService.canDrawOverlays(requireContext())) {
+                FloatingTaskbarService.startIfEnabled(requireContext())
+            }
         }
+        requestAppsRefresh()
     }
 
     override fun onDestroyView() {
         floatingWindowManager?.closeAll()
         floatingWindowManager = null
-        requireContext().unregisterReceiver(batteryReceiver)
+        if (batteryReceiverRegistered) runCatching { requireContext().unregisterReceiver(batteryReceiver) }
+        if (packageReceiverRegistered) runCatching { requireContext().unregisterReceiver(packageReceiver) }
+        batteryReceiverRegistered = false
+        packageReceiverRegistered = false
+        refreshJob?.cancel()
+        wallpaperJob?.cancel()
+        attemptedPwaIcons.clear()
+        flyoutReturnFocus = null
         activePopupWindow?.dismiss()
         activePopupWindow = null
         super.onDestroyView()

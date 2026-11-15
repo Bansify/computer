@@ -12,6 +12,7 @@ android {
         applicationId = "com.gothwad.computer"
         minSdk = 21
         targetSdk = 34
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = (project.findProperty("versionCode") as? String)?.toIntOrNull() ?: 7
         versionName = (project.findProperty("versionName") as? String) ?: "1.0.6"
     }
@@ -87,12 +88,16 @@ android {
         viewBinding = true
     }
     lint {
-        abortOnError = false
+        abortOnError = true
         checkReleaseBuilds = false
     }
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit-ktx:1.2.1")
     // iOS-style continuous (squircle) corners via native Drawables — perceptually
     // smoother than the circular-arc RoundedCornerShape.
     implementation("androidx.graphics:graphics-shapes:1.0.1")

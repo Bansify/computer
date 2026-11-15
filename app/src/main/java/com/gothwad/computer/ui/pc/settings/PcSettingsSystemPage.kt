@@ -28,7 +28,8 @@ class PcSettingsSystemPage(
     private val context: Context,
     private val scope: CoroutineScope,
     private var config: LauncherConfig,
-    private val onConfigChanged: ((LauncherConfig) -> Unit)? = null
+    private val onConfigChanged: ((LauncherConfig) -> Unit)? = null,
+    private val onOpenShortcuts: () -> Unit = {}
 ) {
     private var _binding: LayoutPcSettingsSystemBinding? = null
     val binding get() = _binding!!
@@ -285,32 +286,14 @@ class PcSettingsSystemPage(
             openSystemIntent(Settings.ACTION_CAST_SETTINGS)
         }
 
-        // 13. Keyboard Hotkeys Cheatsheet
+        // Foreground-only keyboard / remote bindings
         bindCard(
             root = b.cardSysRemote,
             iconRes = R.drawable.ic_win_system,
-            title = "Keyboard Shortcuts Cheatsheet",
-            subtitle = "Win+D, Win+E, Alt+Tab, Win+I, Ctrl+Shift+Esc shortcuts",
-            value = "View"
-        ) {
-            val shortcuts = """
-                • Win Key or Ctrl+Esc : Open / Close Start Menu
-                • Win + D : Show Desktop (Minimize all windows)
-                • Win + E : Open File Explorer
-                • Win + I : Open Settings
-                • Alt + Tab : Switch between open windows
-                • Ctrl + Shift + Esc : Open Task Manager
-                • Win + L : Lock PC (if PIN enabled)
-                • F11 : Toggle Fullscreen Mode
-                • Esc : Close active flyout or top window
-            """.trimIndent()
-
-            PcSettingCardHelper.showInfoDialog(
-                context = context,
-                title = "Physical Keyboard Shortcuts",
-                message = shortcuts
-            )
-        }
+            title = "Keyboard & remote shortcuts",
+            subtitle = "Configure keys for Home only; system keys are not intercepted",
+            value = "Configure"
+        ) { onOpenShortcuts() }
 
         // 14. Double-Click to Launch
         bindCard(
@@ -343,7 +326,7 @@ class PcSettingsSystemPage(
                 Hardware: ${Build.HARDWARE} (${Build.BOARD})
                 Processor: ${Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"}
                 Android Base: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})
-                Security Patch: ${Build.VERSION.SECURITY_PATCH ?: "Current"}
+                Security Patch: ${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Build.VERSION.SECURITY_PATCH else "Unavailable"}
             """.trimIndent()
 
             PcSettingCardHelper.showInfoDialog(

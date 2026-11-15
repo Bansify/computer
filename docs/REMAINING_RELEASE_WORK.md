@@ -1,0 +1,20 @@
+# Release blockers and deliberate safety limitations
+
+This branch is not yet release-ready. The phase gates in `task.md` are authoritative. CI and Android emulators supplement, but do not replace, real TV/tablet testing and security review. Keep an alternate Android Home installed.
+
+## Browser and file safety changes
+
+- Private/incognito browsing is disabled, because Android WebView shares cookies and other storage across these tabs. Existing normal browsing history and sessions are not private. Clearing data affects shared WebView data across windows and is not a substitute for isolated private browsing.
+- Website camera/microphone and geolocation requests are denied. File uploads and browser file-drop injection are unavailable until a permission-aware activity-result flow and safe file handling exist. Mixed content and third-party cookies are disabled; some sites may not work. HTTP remains permitted by the app manifest for compatibility; HTTP is not encrypted.
+- The Store uses a packaged offline page, with restricted resource loading/navigation and a content security policy. External Store artwork is disabled and offline fallback icons are used. The bridge still needs adversarial testing on multiple supported WebView versions; it is not a security certification.
+- Automatic website/favicon downloads are disabled; shortcut artwork falls back to an offline generated icon unless supplied by the active page. This avoids unbounded downloads, automatic contact with third-party icon services and background requests to arbitrary network locations.
+- Browser records use process-wide serialized atomic updates. If records cannot be read, updates are refused and a warning is shown; the file is not silently reset. This is not an encrypted store, and records remain subject to platform backup configuration.
+- File-manager drag and drop is local to this app. Moves do not overwrite existing items and only use filesystem rename; cross-filesystem moves fail rather than attempting copy/delete. File-provider access, scoped-storage behavior, races and all destructive operations still need a comprehensive safety review and real-device testing.
+
+## Required before merge/release
+
+- A limited per-device foreground shortcut editor is available under System > Keyboard & remote shortcuts: assign Start, Search or Quick settings using Ctrl + letter/digit, F1–F12 or remote colour keys. No bindings are set by default; conflicts are rejected and the editor can view or clear all mappings. Shortcuts are ignored in text/web input, recovery, lock, popups and floating windows. Android/OEM may not deliver some keys. Individual edit/removal, wider action coverage, real-device tests and optional global shortcuts remain incomplete. Legacy `buttonMap` is preserved, not migrated. No accessibility service is installed; any future service must be explicitly enabled, optional and policy-reviewed.
+- Complete the Phase 4 audit: launcher app-lock coverage, plaintext credential migration, notification/overlay paths, backups, WebView/store bridge security, storage access, privacy and upgrade/rollback testing. Launcher locks are not Android system security.
+- Validate Phase 1–5 acceptance gates on representative real Android TV and tablet devices with remote, touch, keyboard and mouse; test Home selection/rollback, reboot, recovery, permissions, loss-of-focus, low memory and OEM variations. Record named devices, software versions and results.
+- The branch removes automatic publishing on a `main` push. A `v*` tag or either workflow’s manual dispatch can still publish; the two workflows have overlapping version schemes and have not been validated end to end. Review/consolidate them and verify signing before a release. Also check default-branch rules and other repository automation before merging.
+- Agree and measure startup, input, frame and memory budgets; run sustained stress/soak tests. Review the outstanding lint warnings and release lint; confirm dependencies, release workflows, signing and upgrade from the previous signed version. The debug APK is not a signed release candidate.

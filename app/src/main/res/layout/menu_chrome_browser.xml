@@ -54,7 +54,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="10dp"
             android:layout_weight="1"
-            android:text="New incognito tab"
+            android:text="Private browsing unavailable"
             android:textColor="#FFFFFF"
             android:textSize="12sp" />
     </LinearLayout>

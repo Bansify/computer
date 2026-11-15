@@ -8,10 +8,12 @@ class AppCardDiffCallback : DiffUtil.ItemCallback<AppEntry>() {
         return oldItem.pkg == newItem.pkg
     }
 
+    // Bitmaps use identity equality; a new artwork instance must trigger rebinding.
+    @android.annotation.SuppressLint("DiffUtilEquals")
     override fun areContentsTheSame(oldItem: AppEntry, newItem: AppEntry): Boolean {
         return oldItem.label == newItem.label &&
             oldItem.stamp == newItem.stamp &&
             oldItem.tile == newItem.tile &&
-            (oldItem.banner == null) == (newItem.banner == null)
+            oldItem.banner === newItem.banner && oldItem.icon === newItem.icon
     }
 }

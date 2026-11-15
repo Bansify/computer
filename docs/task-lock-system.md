@@ -1,3 +1,5 @@
+> **Historical / superseded:** This file describes an older codebase and contains unsafe or unverified assumptions (including guaranteed system-wide locks and discarding old credentials). Do not execute it as a plan. Use the consolidated [five-phase master plan](../task.md), especially Phase 4, instead.
+
 # Gothwad Computer — Privacy Lock System (Device Lock / App Lock / Hidden Apps)
 
 ## How to use this file

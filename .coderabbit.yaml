@@ -1,0 +1,33 @@
+# CodeRabbit must also be installed as a GitHub App for this repository.
+language: en-US
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: true
+  path_instructions:
+    - path: "app/src/main/**"
+      instructions: |
+        Prioritize regressions that can blank, lock out, crash, or strand an Android TV Home.
+        Review recovery, persistence corruption, process lifecycle, remote focus, Android API
+        compatibility from API 21, permission denial and bounded memory use. Treat launcher
+        locks as UX controls, not system-wide security. Flag WebView, exported intent,
+        file-sharing and credential risks. Never assume real-device tests ran.
+    - path: "app/src/{test,androidTest}/**"
+      instructions: |
+        Check whether tests actually exercise behavior and failure cases, restore persistent
+        state, avoid flaky timing and cover TV remote and Android API compatibility limitations.
+    - path: ".github/**"
+      instructions: |
+        Review least privilege, untrusted pull requests, secrets exposure, artifact integrity,
+        release publishing, action version provenance and whether failures are visible.
+    - path: "**/*.gradle.kts"
+      instructions: |
+        Review Gradle/AGP/Kotlin compatibility, minimum Android API, dependency and signing
+        changes, lint/test behavior and accidental introduction of Compose.
+chat:
+  auto_reply: true

@@ -3,11 +3,17 @@ package com.gothwad.computer.apps.store
 import android.annotation.SuppressLint
 import android.content.Context
 import android.view.View
+import android.graphics.Bitmap
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import com.gothwad.computer.apps.webapp.WebUrlPolicy
+import java.io.ByteArrayInputStream
+import org.json.JSONObject
 import android.widget.Toast
 import com.gothwad.computer.apps.webapp.WebAppManager
 import com.gothwad.computer.data.ConfigStore
@@ -36,7 +42,10 @@ class GothwadStoreView(
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
-            allowFileAccess = true
+            allowFileAccess = false
+            allowContentAccess = false
+            allowFileAccessFromFileURLs = false
+            allowUniversalAccessFromFileURLs = false
             cacheMode = WebSettings.LOAD_DEFAULT
             loadsImagesAutomatically = true
         }
@@ -46,9 +55,34 @@ class GothwadStoreView(
         addJavascriptInterface(StoreJsBridge(), "AndroidStoreBridge")
 
         webChromeClient = WebChromeClient()
-        webViewClient = object : WebViewClient() {}
+        webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                if (url != STORE_ORIGIN + "index.html") view?.removeJavascriptInterface("AndroidStoreBridge")
+            }
+            // The bridge is only attached to this packaged page. Never let a web page,
+            // redirect, frame, or arbitrary asset acquire it.
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean = true
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = true
+            override fun shouldInterceptRequest(view: WebView?, url: String?): WebResourceResponse = localAsset(url)
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse = localAsset(request?.url?.toString())
+        }
 
-        loadUrl("file:///android_asset/store/index.html")
+        loadUrl(STORE_ORIGIN + "index.html")
+    }
+
+    companion object {
+        private const val STORE_ORIGIN = "https://store.gothwad.invalid/"
+        private val assetTypes = mapOf("index.html" to "text/html", "store.css" to "text/css", "store.js" to "application/javascript", "apps.js" to "application/javascript")
+    }
+
+    private fun localAsset(url: String?): WebResourceResponse {
+        val asset = url?.removePrefix(STORE_ORIGIN)?.takeIf { url == STORE_ORIGIN + it }
+        val mime = asset?.let { assetTypes[it] }
+        if (mime != null && asset != null) {
+            val stream = runCatching { context.assets.open("store/$asset") }.getOrNull()
+            if (stream != null) return WebResourceResponse(mime, "UTF-8", stream)
+        }
+        return WebResourceResponse("text/plain", "UTF-8", ByteArrayInputStream(ByteArray(0)))
     }
 
     fun getView(): View = webView
@@ -80,19 +114,20 @@ class GothwadStoreView(
 
         @JavascriptInterface
         fun installApp(name: String, url: String, iconUrl: String, category: String) {
+            if (!WebUrlPolicy.isWebUrl(url) || name.length !in 1..100) return
             coroutineScope.launch {
                 WebAppManager.installWebApp(
                     context = context,
                     url = url,
                     title = name,
-                    icon = null,
-                    iconUrl = iconUrl
+                    // No automatic network icon fetch from untrusted bridge arguments.
+                    icon = WebAppManager.generateFallbackSquircleIcon(name),
+                    iconUrl = null
                 )
                 withContext(Dispatchers.Main) {
                     onAppListChanged?.invoke()
-                    val escapedUrl = url.replace("'", "\\'")
                     webView.evaluateJavascript(
-                        "window.onAppInstalled && window.onAppInstalled('$escapedUrl');",
+                        "window.onAppInstalled && window.onAppInstalled(${JSONObject.quote(url)});",
                         null
                     )
                 }
@@ -101,13 +136,13 @@ class GothwadStoreView(
 
         @JavascriptInterface
         fun uninstallApp(url: String) {
+            if (!WebUrlPolicy.isWebUrl(url)) return
             coroutineScope.launch {
                 WebAppManager.uninstallWebApp(context, url)
                 withContext(Dispatchers.Main) {
                     onAppListChanged?.invoke()
-                    val escapedUrl = url.replace("'", "\\'")
                     webView.evaluateJavascript(
-                        "window.onAppUninstalled && window.onAppUninstalled('$escapedUrl');",
+                        "window.onAppUninstalled && window.onAppUninstalled(${JSONObject.quote(url)});",
                         null
                     )
                 }
@@ -116,6 +151,7 @@ class GothwadStoreView(
 
         @JavascriptInterface
         fun openApp(url: String, name: String) {
+            if (!WebUrlPolicy.isWebUrl(url) || name.length !in 1..100) return
             coroutineScope.launch(Dispatchers.Main) {
                 onOpenWebApp?.invoke(url, name)
             }
@@ -124,7 +160,7 @@ class GothwadStoreView(
         @JavascriptInterface
         fun showToast(message: String) {
             coroutineScope.launch(Dispatchers.Main) {
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, message.take(200), Toast.LENGTH_SHORT).show()
             }
         }
     }

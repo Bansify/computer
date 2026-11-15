@@ -1,0 +1,119 @@
+name: Android CI
+
+on:
+  push:
+    branches: ['arena/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build, unit tests and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/wrapper-validation@v4
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build and test
+        shell: bash
+        run: |
+          set +e
+          ./gradlew assembleDebug assembleRelease bundleRelease testDebugUnitTest lintDebug --no-daemon > build.log 2>&1
+          result=$?
+          cat build.log
+          if [ "$result" -ne 0 ]; then
+            tail -n 60 build.log | while IFS= read -r line; do echo "::error::$line"; done
+          fi
+          exit "$result"
+      - name: Summarize lint findings
+        if: always()
+        run: |
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          paths = [Path('app/build/reports/lint-results-debug.xml'), Path('app/build/outputs/lint-results-debug.xml')]
+          report = next((p for p in paths if p.exists()), None)
+          if report:
+              issues = ET.parse(report).getroot().findall('issue')
+              errors = sum(1 for item in issues if item.get('severity') in ('Error', 'Fatal'))
+              warnings = sum(1 for item in issues if item.get('severity') == 'Warning')
+              print(f'::notice::Lint report: {errors} errors, {warnings} warnings; lintDebug fails on errors; review warnings and release-lint limitations.')
+              for item in issues:
+                  if item.get('severity') not in ('Error', 'Fatal'):
+                      continue
+                  location = item.find('location')
+                  file = location.get('file', '') if location is not None else ''
+                  line = location.get('line', '1') if location is not None else '1'
+                  message = (item.get('id', '') + ': ' + item.get('message', '')).replace('%', '%25').replace('\n', '%0A').replace('\r', '%0D')
+                  print(f'::warning file={file},line={line}::{message}')
+          else:
+              print('::warning::Lint report unavailable; inspect the build job and uploaded reports.')
+          PYCODE
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-ci-reports
+          path: |
+            app/build/reports/
+            app/build/outputs/lint-results-*.xml
+          if-no-files-found: ignore
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  emulator:
+    name: Android ${{ matrix.api }} emulator smoke tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [21, 29, 34]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/wrapper-validation@v4
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Enable KVM when available
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+      - name: Run Android emulator tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash .github/scripts/run-device-tests.sh
+      - name: Upload instrumentation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-emulator-${{ matrix.api }}-test-reports
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            device-tests.log
+          if-no-files-found: ignore

@@ -23,7 +23,12 @@ data class NetStatus(
 
 /** Emits the current network status and updates on every connectivity change. */
 fun networkStatusFlow(context: Context): Flow<NetStatus> = callbackFlow {
-    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+    if (cm == null) {
+        trySend(NetStatus())
+        awaitClose { }
+        return@callbackFlow
+    }
     val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
 
     fun compute(): NetStatus {
@@ -63,16 +68,17 @@ fun networkStatusFlow(context: Context): Flow<NetStatus> = callbackFlow {
         )
     }
 
-    trySend(compute())
+    fun sendStatus() { trySend(runCatching { compute() }.getOrDefault(NetStatus())) }
+    sendStatus()
 
     val callback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) { trySend(compute()) }
-        override fun onLost(network: Network) { trySend(compute()) }
+        override fun onAvailable(network: Network) { sendStatus() }
+        override fun onLost(network: Network) { sendStatus() }
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-            trySend(compute())
+            sendStatus()
         }
     }
     val request = NetworkRequest.Builder().build()
-    cm.registerNetworkCallback(request, callback)
-    awaitClose { cm.unregisterNetworkCallback(callback) }
+    val registered = runCatching { cm.registerNetworkCallback(request, callback) }.isSuccess
+    awaitClose { if (registered) runCatching { cm.unregisterNetworkCallback(callback) } }
 }

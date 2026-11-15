@@ -25,6 +25,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.gothwad.computer.Actions
 import com.gothwad.computer.R
 import com.gothwad.computer.apps.webapp.WebAppManager
+import com.gothwad.computer.apps.webapp.WebUrlPolicy
 import com.gothwad.computer.data.AppEntry
 import com.gothwad.computer.data.AppRepository
 import com.gothwad.computer.data.ConfigStore
@@ -160,19 +161,14 @@ class PcSettingsOtherTabs(
             context = context,
             iconRes = R.drawable.ic_win_system,
             title = "Physical Keyboard Shortcuts",
-            subtitle = "Win key, Alt+Tab, Win+D, Win+E, Win+I, Ctrl+Shift+Esc",
+            subtitle = "Remote navigation and platform key limitations",
             value = "View"
         ) {
             val shortcuts = """
-                • Win Key or Ctrl+Esc : Open / Close Start Menu
-                • Win + D : Show Desktop (Minimize all windows)
-                • Win + E : Open File Explorer
-                • Win + I : Open Settings
-                • Alt + Tab : Switch between open windows
-                • Ctrl + Shift + Esc : Task Manager
-                • Win + L : Lock PC
-                • F11 : Toggle Fullscreen Mode
-                • Esc : Close active flyout or top window
+                Use directional keys to move focus and select to activate.
+                Back closes an open menu or window when supported.
+                Configure foreground shortcuts in System settings. Shortcuts work only on Home, for the selected input device.
+                Android or the device may reserve Home and other system keys.
             """.trimIndent()
             PcSettingCardHelper.showInfoDialog(context, "Keyboard Shortcuts Cheatsheet", shortcuts)
         }
@@ -226,18 +222,20 @@ class PcSettingsOtherTabs(
 
         // Active Connection Status
         val connMgr = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        val activeNet = connMgr?.activeNetwork
-        val caps = connMgr?.getNetworkCapabilities(activeNet)
-
-        val isWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-        val isCellular = caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
-        val isEthernet = caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
+        val caps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            runCatching { connMgr?.getNetworkCapabilities(connMgr.activeNetwork) }.getOrNull()
+        } else null
+        @Suppress("DEPRECATION")
+        val legacy = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) runCatching { connMgr?.activeNetworkInfo }.getOrNull() else null
+        val isWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true || (legacy?.isConnected == true && legacy.type == ConnectivityManager.TYPE_WIFI)
+        val isCellular = caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true || (legacy?.isConnected == true && legacy.type == ConnectivityManager.TYPE_MOBILE)
+        val isEthernet = caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true || (legacy?.isConnected == true && legacy.type == ConnectivityManager.TYPE_ETHERNET)
 
         val netStatus = when {
-            isWifi -> "Wi-Fi Connected • High Speed Internet"
-            isEthernet -> "Ethernet Cable Connected • Gigabit LAN"
-            isCellular -> "Mobile Data Connected • Cellular"
-            else -> "Disconnected • No active internet connection"
+            isWifi -> "Wi-Fi connected"
+            isEthernet -> "Ethernet connected"
+            isCellular -> "Mobile data connected"
+            else -> "Network status unavailable or disconnected"
         }
 
         PcSettingCardHelper.addCard(
@@ -246,7 +244,7 @@ class PcSettingsOtherTabs(
             iconRes = R.drawable.ic_win_network,
             title = "Network Status",
             subtitle = netStatus,
-            value = if (isWifi || isEthernet || isCellular) "Connected" else "Offline"
+            value = if (isWifi || isEthernet || isCellular) "Connected" else "Unknown"
         ) {
             openIntent(Settings.ACTION_WIFI_SETTINGS)
         }
@@ -387,11 +385,27 @@ class PcSettingsOtherTabs(
             parent = container,
             context = context,
             iconRes = R.drawable.ic_win_update,
-            title = "Startup Apps",
-            subtitle = "${config.pcStartupApps.size} apps configured to start with PC Emulator",
-            value = "${config.pcStartupApps.size} Apps"
+            title = "Startup Apps (not available yet)",
+            subtitle = "Saved selections are retained but apps do not start automatically.",
+            value = "Unavailable"
         ) {
-            showStartupAppsDialog()
+            Toast.makeText(context, "Automatic startup is not implemented on this device.", Toast.LENGTH_LONG).show()
+        }
+
+        // Android remains in control of the default Home selection.
+        PcSettingCardHelper.addCard(
+            parent = container,
+            context = context,
+            iconRes = R.drawable.ic_win_system,
+            title = "Default Home app",
+            subtitle = if (com.gothwad.computer.data.HomeSettings.isDefaultHome(context))
+                "Gothwad Computer is the current Home. You can switch back to another launcher."
+            else "Choose a Home app in Android settings; keep another launcher installed.",
+            value = "Open"
+        ) {
+            if (!com.gothwad.computer.data.HomeSettings.open(context)) {
+                Toast.makeText(context, R.string.safe_home_no_settings, Toast.LENGTH_SHORT).show()
+            }
         }
 
         // Default Apps
@@ -936,7 +950,7 @@ class PcSettingsOtherTabs(
                 Device: ${Build.MANUFACTURER} ${Build.MODEL}
                 Processor: ${Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"}
                 Android Base: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})
-                Security Patch: ${Build.VERSION.SECURITY_PATCH ?: "2026-09-01"}
+                Security Patch: ${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Build.VERSION.SECURITY_PATCH else "Unavailable"}
             """.trimIndent()
             PcSettingCardHelper.showInfoDialog(context, "Windows Specifications", specs)
         }
@@ -1012,7 +1026,7 @@ class PcSettingsOtherTabs(
 
     private fun showAppActionDialog(app: AppEntry) {
         val actions = listOf(
-            "Launch in Floating Window",
+            "Launch app",
             "Add Desktop Shortcut",
             "Pin to Taskbar",
             "App Info (Permissions & Storage)",
@@ -1024,8 +1038,9 @@ class PcSettingsOtherTabs(
             .setItems(actions.toTypedArray()) { _, which ->
                 when (which) {
                     0 -> {
-                        Actions.launchApp(context, app.pkg)
-                        Toast.makeText(context, "Launching ${app.label}...", Toast.LENGTH_SHORT).show()
+                        val activity = context as? com.gothwad.computer.MainActivity
+                        if (activity != null) activity.requestAppLaunch(app)
+                        else Toast.makeText(context, "Return to Home to launch this app", Toast.LENGTH_SHORT).show()
                     }
                     1 -> {
                         scope.launch {
@@ -1152,7 +1167,7 @@ class PcSettingsOtherTabs(
             .setPositiveButton("Create Shortcut") { _, _ ->
                 val name = etName.text.toString().trim()
                 val url = etUrl.text.toString().trim()
-                if (url.isNotEmpty()) {
+                if (url.isNotEmpty() && WebUrlPolicy.isWebUrl(WebAppManager.formatUrl(url))) {
                     scope.launch {
                         WebAppManager.installWebApp(
                             context = context,
