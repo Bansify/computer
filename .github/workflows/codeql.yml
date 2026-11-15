@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         if: matrix.build-mode == 'manual'
         with:
           distribution: temurin
