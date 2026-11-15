@@ -16,12 +16,24 @@ on:
         default: ''
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  validate:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   build_release:
     name: Build & Publish Release
+    needs: validate
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: production-release
+      queue: max
 
     steps:
       - name: Checkout Source Code
@@ -41,36 +53,10 @@ jobs:
       - name: Determine Version Code and Name
         id: versioning
         env:
+          GH_TOKEN: ${{ github.token }}
           INPUT_VERSION_CODE: ${{ inputs.version_code }}
           INPUT_VERSION_NAME: ${{ inputs.version }}
-        run: |
-          if [ -n "$INPUT_VERSION_CODE" ]; then
-            V_CODE="$INPUT_VERSION_CODE"
-          else
-            V_CODE=$(( 10 + GITHUB_RUN_NUMBER ))
-          fi
-
-          if [ -n "$INPUT_VERSION_NAME" ]; then
-            V_NAME="$INPUT_VERSION_NAME"
-          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            V_NAME="${GITHUB_REF_NAME#v}"
-          else
-            V_NAME="1.0.${V_CODE}"
-          fi
-
-          if ! [[ "$V_CODE" =~ ^[1-9][0-9]{0,9}$ ]] || (( 10#$V_CODE > 2100000000 )); then
-            echo "Invalid Android version code" >&2
-            exit 1
-          fi
-          if ! [[ "$V_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]{0,79}$ ]]; then
-            echo "Invalid version name" >&2
-            exit 1
-          fi
-
-          echo "Determined Version Code: $V_CODE"
-          echo "Determined Version Name: $V_NAME"
-          echo "v_code=$V_CODE" >> "$GITHUB_OUTPUT"
-          echo "v_name=$V_NAME" >> "$GITHUB_OUTPUT"
+        run: python3 .github/scripts/release_version.py
 
       - name: Build Release APK, Debug APK and AAB
         run: |
@@ -98,6 +84,10 @@ jobs:
           APK=$(find app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
           DEBUG_APK=$(find app/build/outputs/apk/debug/ -name "*.apk" | head -n 1)
           AAB=$(find app/build/outputs/bundle/release/ -name "*.aab" | head -n 1)
+          test -s "$APK" && test -s "$DEBUG_APK" && test -s "$AAB" || {
+            echo "Missing APK or AAB build output" >&2
+            exit 1
+          }
 
           if [ -n "$DEBUG_APK" ]; then
             cp "$DEBUG_APK" "release_out/GothwadComputer-v${V_NAME}-Debug.apk"
@@ -116,6 +106,7 @@ jobs:
           fi
 
           KS_PATH="/tmp/release_key.jks"
+          trap 'rm -f "$KS_PATH" /tmp/unaligned_temp.apk' EXIT
           echo "Decoding permanent release keystore from GitHub Secrets..."
           echo "$KEYSTORE_BASE64" | base64 -d > "$KS_PATH"
 
@@ -135,10 +126,12 @@ jobs:
           ZIPALIGN=$(find "$ANDROID_HOME/build-tools/" -name "zipalign" | sort -V | tail -n 1)
           APKSIGNER=$(find "$ANDROID_HOME/build-tools/" -name "apksigner" | sort -V | tail -n 1)
           
+          test -n "$ZIPALIGN" && test -n "$APKSIGNER" || { echo "Android signing tools missing" >&2; exit 1; }
+
           if [ -n "$APK" ]; then
             UNALIGNED_TEMP="/tmp/unaligned_temp.apk"
             if [ -n "$ZIPALIGN" ]; then
-              "$ZIPALIGN" -v -p 4 "$APK" "$UNALIGNED_TEMP" || cp "$APK" "$UNALIGNED_TEMP"
+              "$ZIPALIGN" -v -p 4 "$APK" "$UNALIGNED_TEMP"
             else
               cp "$APK" "$UNALIGNED_TEMP"
             fi
@@ -162,12 +155,23 @@ jobs:
               -storepass "$KEYSTORE_PASS" -keypass "$KEY_PASS" \
               "release_out/GothwadComputer-v${V_NAME}-PlayStore.aab" \
               "$ACTUAL_ALIAS"
+            jarsigner -verify "release_out/GothwadComputer-v${V_NAME}-PlayStore.aab"
             echo "Successfully signed Play Store AAB!"
           fi
 
           # Securely destroy the temporary keystore file so it is never exposed or uploaded
           rm -f "$KS_PATH"
           echo "Keystore securely cleaned up."
+
+      - name: Verify upgrade signing against v1.0.20
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V_NAME: ${{ steps.versioning.outputs.v_name }}
+          V_CODE: ${{ steps.versioning.outputs.v_code }}
+        run: |
+          mkdir -p release-baseline
+          gh release download v1.0.20 --pattern 'GothwadComputer-v1.0.20-Release.apk' --dir release-baseline
+          bash .github/scripts/check-release-apk.sh release-baseline/GothwadComputer-v1.0.20-Release.apk "release_out/GothwadComputer-v${V_NAME}-Release.apk" "$V_CODE"
 
       - name: Upload Release Artifacts
         uses: actions/upload-artifact@v7
@@ -181,6 +185,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ steps.versioning.outputs.v_name }}
+          target_commitish: ${{ github.sha }}
+          fail_on_unmatched_files: true
           name: v${{ steps.versioning.outputs.v_name }}
           draft: false
           prerelease: false
