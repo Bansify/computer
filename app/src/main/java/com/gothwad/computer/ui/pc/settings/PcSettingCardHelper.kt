@@ -37,6 +37,8 @@ object PcSettingCardHelper {
         onSwitchChanged: ((Boolean) -> Unit)? = null,
         onClick: (() -> Unit)? = null
     ) {
+        binding.cardRowRoot.isFocusable = onSwitchChanged != null || onClick != null
+        binding.cardRowRoot.contentDescription = listOfNotNull(title, subtitle, value).joinToString(", ")
         binding.cardRowIcon.setImageResource(iconRes)
         binding.cardRowTitle.text = title
 

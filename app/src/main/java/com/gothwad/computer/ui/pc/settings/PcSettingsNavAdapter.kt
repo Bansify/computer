@@ -16,6 +16,7 @@ class PcSettingsNavAdapter(
 ) : RecyclerView.Adapter<PcSettingsNavAdapter.NavViewHolder>() {
 
     fun setSelectedId(id: Int) {
+        if (selectedId == id) return
         val prevIndex = items.indexOfFirst { it.id == selectedId }
         val newIndex = items.indexOfFirst { it.id == id }
         selectedId = id
@@ -48,6 +49,7 @@ class PcSettingsNavAdapter(
         fun bind(item: PcSettingsNavItem) {
             val isSelected = item.id == selectedId
             binding.navItemTitle.text = item.title
+            binding.navItemRoot.contentDescription = item.title
             binding.navItemIcon.setImageResource(item.iconRes)
 
             if (isSelected) {

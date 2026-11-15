@@ -56,6 +56,8 @@
 
         <TextView
             android:id="@+id/btn_all_apps"
+            android:background="@drawable/bg_pc_desktop_item"
+            android:padding="4dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:clickable="true"

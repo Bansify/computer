@@ -33,6 +33,22 @@ jobs:
             tail -n 60 build.log | while IFS= read -r line; do echo "::error::$line"; done
           fi
           exit "$result"
+      - name: Summarize lint findings
+        if: always()
+        run: |
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          paths = [Path('app/build/reports/lint-results-debug.xml'), Path('app/build/outputs/lint-results-debug.xml')]
+          report = next((p for p in paths if p.exists()), None)
+          if report:
+              issues = ET.parse(report).getroot().findall('issue')
+              errors = sum(1 for item in issues if item.get('severity') in ('Error', 'Fatal'))
+              warnings = sum(1 for item in issues if item.get('severity') == 'Warning')
+              print(f'::notice::Lint report: {errors} errors, {warnings} warnings; build does not yet enforce a zero-error gate.')
+          else:
+              print('::warning::Lint report unavailable; inspect the build job and uploaded reports.')
+          PYCODE
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -78,15 +94,7 @@ jobs:
           disable-animations: true
           emulator-boot-timeout: 600
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: |
-            set +e
-            ./gradlew connectedDebugAndroidTest --no-daemon > device-tests.log 2>&1
-            result=$?
-            cat device-tests.log
-            if [ "$result" -ne 0 ]; then
-              tail -n 80 device-tests.log | while IFS= read -r line; do echo "::error::$line"; done
-            fi
-            exit "$result"
+          script: bash .github/scripts/run-device-tests.sh
       - name: Upload instrumentation reports
         if: always()
         uses: actions/upload-artifact@v4
