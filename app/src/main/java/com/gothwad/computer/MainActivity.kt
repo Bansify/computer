@@ -65,7 +65,7 @@ class MainActivity : AppCompatActivity() {
         override fun onReceive(context: Context, intent: Intent) {
             val pkg = intent.data?.schemeSpecificPart
             val launchable = pkg != null && packageManager.getLaunchIntentForPackage(pkg) != null
-            if (intent.action == Intent.ACTION_PACKAGE_REMOVED || launchable) {
+            if (normalDesktopStarted && (intent.action == Intent.ACTION_PACKAGE_REMOVED || launchable)) {
                 rescanTick++
                 refreshAppsList()
             }
@@ -161,8 +161,9 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
             currentConfig = config
-            if (config.deviceLock.enabled && config.deviceLock.value.isEmpty()) {
-                // Inconsistent credential must not be interpreted as an unlocked device.
+            if ((config.deviceLock.enabled && config.deviceLock.value.isEmpty()) ||
+                (config.appLock.enabled && config.lockedApps.isNotEmpty() && config.appLock.value.isEmpty())) {
+                // Inconsistent credentials must not be interpreted as unlocked.
                 showRecovery(configReadable = false)
                 return@launch
             }
@@ -230,6 +231,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showRecovery(configReadable: Boolean) {
         normalDesktopStarted = false
+        runCatching { com.gothwad.computer.service.FloatingTaskbarService.stop(this) }
         val view = ViewSafeHomeBinding.inflate(layoutInflater)
         safeBinding = view
         binding.deviceLockContainer.removeAllViews()
@@ -237,16 +239,22 @@ class MainActivity : AppCompatActivity() {
         binding.deviceLockContainer.visibility = View.VISIBLE
         binding.deviceLockContainer.bringToFront()
         view.safeHomeMessage.setText(if (configReadable) R.string.safe_home_message else R.string.safe_home_config_error)
-        view.safeRetry.visibility = if (configReadable) View.VISIBLE else View.GONE
+        view.safeRetry.setText(if (configReadable) R.string.safe_home_retry else R.string.safe_home_retry_config)
         view.safeAppsLabel.visibility = if (configReadable) View.VISIBLE else View.GONE
-        view.safeRetry.setOnClickListener { startNormalDesktop() }
+        view.safeRetry.setOnClickListener {
+            if (configReadable) startNormalDesktop() else {
+                safeBinding = null
+                binding.deviceLockContainer.removeAllViews()
+                checkDeviceLockOnColdStart()
+            }
+        }
         view.safeDefaultHome.setOnClickListener {
             if (!HomeSettings.open(this)) Toast.makeText(this, R.string.safe_home_no_settings, Toast.LENGTH_SHORT).show()
         }
         view.safeSystemSettings.setOnClickListener {
             if (!HomeSettings.openSystemSettings(this)) Toast.makeText(this, R.string.safe_home_no_settings, Toast.LENGTH_SHORT).show()
         }
-        (if (configReadable) view.safeRetry else view.safeDefaultHome).requestFocus()
+        view.safeRetry.requestFocus()
         if (configReadable) loadSafeApps(view)
     }
 

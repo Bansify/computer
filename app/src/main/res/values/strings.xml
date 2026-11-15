@@ -5,6 +5,7 @@
     <string name="safe_home_message">The desktop had repeated startup errors. Your settings have not been erased. You can retry, open Android settings, or choose another Home app.</string>
     <string name="safe_home_config_error">Your launcher settings could not be read, so app access is unavailable here to avoid bypassing a saved lock. No settings were erased. You can open Android settings or choose another Home app.</string>
     <string name="safe_home_retry">Retry normal desktop</string>
+    <string name="safe_home_retry_config">Retry reading settings</string>
     <string name="safe_home_default">Choose default Home app</string>
     <string name="safe_home_settings">Open Android settings</string>
     <string name="safe_home_apps">Available apps</string>

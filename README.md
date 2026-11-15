@@ -2,7 +2,7 @@
 
 Gothwad Computer is a Kotlin Android application that presents a desktop-style environment with an app grid, taskbar, floating built-in windows, file manager, browser and web-app shortcuts. It runs on Android devices (including devices without a touchscreen); it is not a Windows emulator and does not run Windows executables.
 
-> **Current state:** The active navigation graph starts the PC desktop. The manifest does not declare the Android `HOME` category, so this checkout does not register as the system's default Home app. Some settings and legacy TV-related configuration exist without a complete corresponding feature. See the [analysis](docs/PROJECT_ANALYSIS.md) before relying on security or privacy features.
+> **Current state:** The manifest registers a Home candidate; the user must choose it in Android settings. Initial recovery support is not yet verified on real TVs or tablets: keep another launcher installed and do not rely on this as your only Home. Some settings and legacy TV-related configuration are incomplete. See the [analysis](docs/PROJECT_ANALYSIS.md) and [Phase 1 test protocol](docs/PHASE1_TESTING.md).
 
 ## What is in the app
 
@@ -21,7 +21,7 @@ The UI uses **Android Views, XML, ViewBinding, Fragments and RecyclerView**. Do 
 | App ID / namespace | `com.gothwad.computer` |
 | Minimum / target / compile SDK | 21 / 34 / 34 |
 | Java / Kotlin | JDK 17 / Kotlin 2.0.20 |
-| Android Gradle Plugin / wrapper | 8.5.2 / Gradle 9.3.1 |
+| Android Gradle Plugin / wrapper | 8.5.2 / Gradle 8.7 |
 | Default version | `1.0.6` (code `7`); overridable via Gradle properties |
 | Persistence | Preferences DataStore, JSON files, SharedPreferences and internal files |
 
@@ -32,9 +32,8 @@ The Gradle/AGP pair above is what is checked in, not a compatibility guarantee; 
 Prerequisites: JDK 17, Android SDK Platform 34 and matching SDK Build Tools, plus network access to the Gradle distribution and the Google/Maven/plugin repositories. Open the project in a compatible Android Studio or configure `ANDROID_HOME` / `local.properties` yourself.
 
 ```bash
-# The checked-in gradlew is not executable in this checkout; either invoke with sh
-sh ./gradlew assembleDebug
-# or: chmod +x gradlew && ./gradlew assembleDebug
+# Build the debug APK
+./gradlew assembleDebug
 ```
 
 Debug output: `app/build/outputs/apk/debug/`. Build release artifacts with:

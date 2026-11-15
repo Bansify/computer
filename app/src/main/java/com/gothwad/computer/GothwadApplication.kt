@@ -4,8 +4,6 @@ import android.app.Application
 import android.content.Context
 import android.util.Log
 import java.io.File
-import java.io.PrintWriter
-import java.io.StringWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -41,7 +39,8 @@ class GothwadApplication : Application() {
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                Log.e(TAG, "Uncaught exception on thread ${thread.name}", throwable)
+                // Do not write exception messages/stack traces to logcat: they may contain user data.
+                Log.e(TAG, "Uncaught exception during app execution (${throwable.javaClass.name})")
                 com.gothwad.computer.data.StartupRecovery.recordUncaughtStartupCrash(this)
                 logCrashToFile(throwable)
             } catch (e: Exception) {
@@ -61,10 +60,22 @@ class GothwadApplication : Application() {
             }
 
             val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
-            val sw = StringWriter()
-            throwable.printStackTrace(PrintWriter(sw))
-
-            crashFile.appendText("[$timestamp] EXCEPTION:\n$sw\n--------------------\n")
+            // Keep exception types and code locations, not exception messages or user-supplied data.
+            val report = buildString {
+                append("[$timestamp] EXCEPTION:\n")
+                var current: Throwable? = throwable
+                repeat(5) {
+                    val cause = current ?: return@repeat
+                    append(cause.javaClass.name).append('\n')
+                    cause.stackTrace.take(40).forEach { frame ->
+                        append("  ").append(frame.className).append('.').append(frame.methodName)
+                            .append(':').append(frame.lineNumber).append('\n')
+                    }
+                    current = cause.cause?.takeUnless { it === cause }
+                }
+                append("--------------------\n")
+            }
+            crashFile.appendText(report.take(16 * 1024))
         }
     }
 

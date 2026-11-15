@@ -1,12 +1,12 @@
 # Gothwad Computer — project analysis & developer guide
 
-**Review scope:** repository source and configuration, reviewed 2026-11-15. Yeh static code analysis hai, device par runtime/security audit nahi. Feature claims below refer to the checked-in implementation, not guarantees on every Android version or device. Findings are observations and recommendations; no application behavior was changed during this documentation work.
+**Review scope:** baseline repository source and configuration, reviewed 2026-11-15. Phase 1 work has since begun: HOME registration, initial recovery and build-only CI are being added; consult [Phase 1 testing](PHASE1_TESTING.md) and the current code for their status. Yeh static code analysis hai, device par runtime/security audit nahi. Feature claims below refer to the checked-in implementation, not guarantees on every Android version or device. Findings are observations and recommendations; no application behavior was changed during this documentation work.
 
 ## 1. Project kya karta hai?
 
 Gothwad Computer Android ke andar desktop-like interface deta hai: installed Android apps ka grid/start menu, taskbar, aur app ke andar managed floating windows. Built-in file manager, WebView browser aur HTML/JS based store available hain. Store “install” actually browser shortcut banata hai, Android APK install nahi. Yeh Windows, PC hardware ya Windows applications ka emulator nahi hai.
 
-**Important distinction:** Android TV/remote-related code aur legacy TV configuration present hain, lekin [`nav_graph.xml`](../app/src/main/res/navigation/nav_graph.xml) ka ek hi destination `PcLauncherFragment` hai. Manifest mein `LAUNCHER` aur `LEANBACK_LAUNCHER` hain, `HOME` / `DEFAULT` Home intent filter nahi. Isliye default launcher replacement ya separate TV UI ka claim current code se establish nahi hota. Purane README ke Compose, Media3 video wallpaper, weather aur Apache license claims bhi current build/files se supported nahi the.
+**Important distinction:** Android TV/remote-related code aur legacy TV configuration present hain, lekin [`nav_graph.xml`](../app/src/main/res/navigation/nav_graph.xml) ka ek hi destination `PcLauncherFragment` hai. Manifest mein `LAUNCHER`, `LEANBACK_LAUNCHER` aur ab `HOME` / `DEFAULT` filter hain; actual default Home selection aur device behavior ka verification pending hai. Separate TV UI ka claim current navigation se establish nahi hota. Purane README ke Compose, Media3 video wallpaper, weather aur Apache license claims bhi current build/files se supported nahi the.
 
 ## 2. Repository map
 
@@ -56,10 +56,10 @@ FloatingTaskbarService -> system overlay (when allowed) -> MainActivity actions
 
 ### Startup and state
 
-1. `GothwadApplication` applies custom DPI when configured and registers an uncaught-exception handler in the main process. It appends stack traces to internal `gothwad_crash.log`, deleting the previous file when it exceeds 64 KiB before the next append.
+1. `GothwadApplication` applies custom DPI when configured and registers an uncaught-exception handler in the main process. It appends bounded, redacted exception types and code locations to internal `gothwad_crash.log`, deleting the previous file when it exceeds 64 KiB before the next append.
 2. `MainActivity` applies locale/DPI, inflates `ActivityMainBinding`, registers a package-change receiver, checks the launcher device lock and collects configuration with lifecycle-aware coroutines.
 3. Navigation loads `PcLauncherFragment`, which observes config and status, builds desktop/taskbar lists and opens built-in windows. `onDestroyView()` closes its managed windows.
-4. `ConfigStore` stores one serialized `LauncherConfig` JSON string in Preferences DataStore `launcher_config` / key `config_json`. Updates are transactional via `edit`. Unknown JSON keys are ignored; malformed/undecodable configuration falls back to default config. This fallback can make existing settings appear reset; investigate before editing persisted data.
+4. `ConfigStore` stores one serialized `LauncherConfig` JSON string in Preferences DataStore `launcher_config` / key `config_json`. Updates are transactional via `edit`. Unknown JSON keys are ignored. An absent config uses defaults; malformed/undecodable config now fails instead of being silently replaced, and startup offers a limited recovery screen. Device verification is pending.
 
 ### App discovery and launch
 
@@ -118,7 +118,7 @@ Priorities below are suggested engineering priorities, not verified exploit seve
 ### P0 — don't market current locks/private browsing as security boundaries
 
 1. **Plaintext credentials and backup exposure.** `LockCredential.value` in [`Config.kt`](../app/src/main/java/com/gothwad/computer/data/Config.kt) is serialized into DataStore; backup is enabled. A launcher PIN is not a system lock and does not protect against all routes to other apps. Move to a salted, slow password verifier, review backup exclusions and provide a migration/reset strategy. Prefer Android system credentials for device protection; never log secrets.
-2. **Exported activity launch path bypasses launcher checks.** Manifest exports `MainActivity`; `onNewIntent` handles `OPEN_APP` by calling `Actions.launchApp` directly, bypassing the device and app lock checks in `handleAppLaunch`. Explicit external intents can reach exported activities. Reproduce with a separate test app/ADB and route all app opens through a single validated authorization path, or restrict external entry points. Built-in window branches in `PcLauncherFragment.handleAppLaunch` also precede its app-lock check. These locks cannot prevent launching the same Android app from outside this launcher.
+2. **Launcher lock enforcement needs further review.** Phase 1 changed exported `MainActivity.onNewIntent("OPEN_APP")` to require loaded/unlocked config and route known apps through `handleAppLaunch`. This has not yet been device/security tested; reproduce with a separate test app/ADB and review all other entry points. Built-in window branches in `PcLauncherFragment.handleAppLaunch` also precede its app-lock check. These locks cannot prevent launching the same Android app from outside this launcher.
 3. **Incognito is not private.** `createTabWebView(isIncognito)` changes cache mode but uses the shared `CookieManager`; `onPageFinished` records history without checking `isIncognito`. Do not rely on it for private browsing. Suppress history and design real profile/session isolation and cleanup; WebView-wide cookies make this nontrivial. Test cookies, storage, downloads, history and simultaneous normal/private tabs.
 
 ### P1 — hardening and release reliability
@@ -126,7 +126,7 @@ Priorities below are suggested engineering priorities, not verified exploit seve
 4. **Store JavaScript bridge trust boundary.** `GothwadStoreView` enables JavaScript/file access and attaches `AndroidStoreBridge`; its default `WebViewClient` does not explicitly restrict navigation. Bridge methods can modify shortcut state and open URLs. Audit all navigations and frames, constrain content to trusted local assets, validate bridge arguments/schemes, and encode values safely before `evaluateJavascript`. This is a potential attack surface; static review alone does not prove a reachable exploit.
 5. **Web content policy is permissive.** General WebView enables JavaScript, file/content access, third-party cookies, mixed-content compatibility and autoplay; manifest permits cleartext. Review requirements, limit file/content access and URL schemes, prefer HTTPS, and make any needed exceptions explicit. Test login, downloads and trusted local assets after tightening.
 6. **Data access and concurrency.** `AppRepository.scan` mutates a shared `HashSet` from multiple `Dispatchers.IO` async tasks; it is not thread-safe. Overlapping scans also share `memoryCache` and cache files. Use per-task results / synchronization and add concurrent-rescan tests. `BrowserDataStore` synchronizes individual reads/writes but read-modify-write sequences are not atomic across callers; exceptions on save are swallowed. Consider a single serialized transactional store and error reporting.
-7. **Build configuration needs verification.** Wrapper points to Gradle 9.3.1 while AGP is 8.5.2; compatibility is not verified here. Pin and test a supported combination, including configuration cache and CI. Release lint is disabled and lint does not abort on errors. No tests under `app/src/test` or `app/src/androidTest` were found.
+7. **Build configuration needs verification.** Wrapper has been pinned to Gradle 8.7 while AGP is 8.5.2; verify the current CI/device evidence for this combination. Pin and test a supported combination, including configuration cache and CI. Release lint is disabled and lint does not abort on errors. Initial config/recovery policy unit tests were added in Phase 1; instrumentation/device coverage is still pending.
 8. **Release workflow overlap.** `build_apk.yml` runs on pushes to `main`/`master` or manual dispatch and creates a release; `release.yml` runs on `v*` tags or manual dispatch and also creates one. They have independent run numbers/version defaults and may conflict or produce inconsistent version codes. Validate the chosen release flow and monotonic version codes. Both workflows require signing secrets and fetch a replacement wrapper JAR if missing/corrupt; verify provenance/checksums rather than silently relying on an unverified download.
 
 ### P2 — maintainability / product clarity
@@ -140,8 +140,8 @@ Priorities below are suggested engineering priorities, not verified exploit seve
 ### Local setup
 
 - JDK 17; Android SDK Platform 34 and build tools; an Android emulator/device at API 21+ (test modern API levels too).
-- Gradle wrapper: `gradle/wrapper/gradle-wrapper.properties` points to 9.3.1; AGP 8.5.2, Kotlin 2.0.20. Wrapper distribution and dependencies require network access to their respective hosts.
-- `gradlew` is checked in without executable bit. Use `sh ./gradlew ...`, or `chmod +x gradlew` locally.
+- Gradle wrapper: `gradle/wrapper/gradle-wrapper.properties` points to 8.7; AGP 8.5.2, Kotlin 2.0.20. Wrapper distribution and dependencies require network access to their respective hosts.
+- `gradlew` has an executable bit; use `./gradlew ...` (or `sh ./gradlew ...`).
 - Android Studio can generate `local.properties` with `sdk.dir`; do not commit local SDK paths or keystores.
 
 ```bash
@@ -155,12 +155,13 @@ sh ./gradlew connectedDebugAndroidTest
 sh ./gradlew assembleRelease bundleRelease
 ```
 
-These are intended commands, not evidence of successful execution. **Review environment:** no `java` executable or configured Android SDK was available, and the sandbox network is limited to selected hosts; therefore no Gradle build, lint, unit test or device test was run. `gradlew` and the wrapper JAR are present. Validate the toolchain/versions in a full Android build environment first.
+These are intended commands, not evidence of successful execution. **Review environment:** no `java` executable or configured Android SDK was available, and the sandbox network is limited to selected hosts; therefore no Gradle build, lint, unit test or device test was run. `gradlew` and the wrapper JAR are present; check the latest CI run for build results. Validate the toolchain/versions in a full Android build environment first.
 
 `app/build.gradle.kts` uses R8/resource shrinking for release, disables release lint checks and supports version overrides with `-PversionCode=... -PversionName=...`. By default local release artifacts are unsigned. `-PlocalSign` signs with the debug key for local testing only. Alternatively Gradle can use `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` for CI signing; keep them outside source control.
 
 ### GitHub Actions
 
+- [`ci.yml`](../.github/workflows/ci.yml): build-only checks on pull requests, Arena branch pushes and manual dispatch; does not publish a release. Check its latest run for results.
 - [`build_apk.yml`](../.github/workflows/build_apk.yml): push to `main`/`master` or manual dispatch; derives or accepts version; builds debug/release APK and release AAB, signs release outputs in a separate step, uploads artifacts and publishes a GitHub release.
 - [`release.yml`](../.github/workflows/release.yml): `v*` tag push or manual dispatch; similar build, signing, artifacts and release publication.
 - Signing steps use repository secrets `RELEASE_KEYSTORE_BASE64` (fallback `KEYSTORE_BASE64`), `KEYSTORE_PASSWORD`, `KEY_PASSWORD` and optionally `KEY_ALIAS` (otherwise auto-detected/fallback). They require signing material to succeed. Do not put secret values in documentation, logs or git.
@@ -180,8 +181,8 @@ These are intended commands, not evidence of successful execution. **Review envi
 
 ## 9. Recommended next steps
 
-1. Address exported launch path, plaintext credentials and misleading private mode before treating locks/browser privacy as production-ready.
-2. Establish a reproducible supported Gradle/AGP/SDK combination and add CI for debug build, lint and tests on pull requests.
+1. Verify every launcher entry path, address plaintext credentials and misleading private mode before treating locks/browser privacy as production-ready.
+2. Establish a reproducible supported Gradle/AGP/SDK combination and verify the new build-only CI for debug/release builds, lint and tests on pull requests.
 3. Add tests for config migration, app scanning concurrency, browser records, shortcut operations and security entry points; follow with device/instrumentation coverage.
 4. Audit WebView bridge and access policy, backup rules, permissions, store policy and Android background restrictions.
 5. Decide whether to implement genuine Home registration, TV mode and boot/startup features, or remove/label unsupported controls. Confirm license with owner.
