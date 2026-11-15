@@ -5,7 +5,7 @@
 **Source baseline:** `com.gothwad.computer`, min SDK 21, target/compile SDK 34, Kotlin + XML/ViewBinding. Confirm current files before implementation; this plan is not proof a feature is implemented or tested.
 **Priority:** Prevent user lockout and preserve a recoverable Home first; remote-only usability second; feature breadth and polish after that.
 
-> This is the **canonical plan**, superseding old task instructions. [`task-lock-system.md`](task-lock-system.md) is historical, not an implementation specification. In particular, do not follow its claims of unbypassable accessibility locks or its instruction to discard old credentials. Never assume a launcher or accessibility service can control all Android/OEM behavior.
+> This is the **canonical plan**, superseding old task instructions. [`task-lock-system.md`](docs/task-lock-system.md) is historical, not an implementation specification. In particular, do not follow its claims of unbypassable accessibility locks or its instruction to discard old credentials. Never assume a launcher or accessibility service can control all Android/OEM behavior.
 
 ## Ground rules for all five phases
 

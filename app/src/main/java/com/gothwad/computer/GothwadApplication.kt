@@ -34,6 +34,14 @@ class GothwadApplication : Application() {
         }
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_RUNNING_LOW) {
+            // Release only our disposable cache; never terminate other apps.
+            com.gothwad.computer.data.AppRepository.clearMemoryCache()
+        }
+    }
+
     private fun setupCrashLogging() {
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
 

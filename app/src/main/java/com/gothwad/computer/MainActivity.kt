@@ -40,6 +40,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -102,8 +103,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         recoveryMode = StartupRecovery.shouldUseSafeMode(this)
-        // Avoid restoring the failing desktop fragment when entering recovery.
-        super.onCreate(if (recoveryMode) null else savedInstanceState)
+        // Do not restore a desktop fragment before configuration/lock checks. Persisted
+        // launcher settings remain intact; transient windows/dialogs are not restored.
+        super.onCreate(null)
         // Only the debug source set has a fault implementation; never crash recovery itself.
         if (!recoveryMode) StartupTestHooks.beforeStartup(intent)
 
@@ -117,6 +119,10 @@ class MainActivity : AppCompatActivity() {
         // Handle Back when device is locked so it cannot be bypassed
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                if (safeBinding != null) {
+                    safeBinding?.safeRetry?.requestFocus()
+                    return
+                }
                 if (!configReady || (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled)) {
                     // Stay on device lock screen
                     return
@@ -127,7 +133,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        ContextCompat.registerReceiver(
+        runCatching { ContextCompat.registerReceiver(
             this,
             packageReceiver,
             IntentFilter().apply {
@@ -137,7 +143,7 @@ class MainActivity : AppCompatActivity() {
                 addDataScheme("package")
             },
             ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
+        ) }.onFailure { android.util.Log.w("MainActivity", "Package change listener unavailable") }
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -233,6 +239,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun showRecovery(configReadable: Boolean) {
         normalDesktopStarted = false
+        if (!configReadable) {
+            configReady = false
+            GothwadApplication.hasUnlockedDeviceThisProcess = false
+            // A restored desktop or its observers must not run behind unreadable settings.
+            runCatching {
+                supportFragmentManager.findFragmentById(R.id.nav_host_fragment)?.let {
+                    supportFragmentManager.beginTransaction().remove(it).commitNowAllowingStateLoss()
+                }
+            }
+        }
         runCatching { com.gothwad.computer.service.FloatingTaskbarService.stop(this) }
         val view = ViewSafeHomeBinding.inflate(layoutInflater)
         safeBinding = view
@@ -273,7 +289,7 @@ class MainActivity : AppCompatActivity() {
                         .map { info ->
                             val pkg = info.activityInfo.packageName
                             AppEntry(pkg, runCatching { info.loadLabel(pm).toString() }.getOrDefault(pkg), null, null, "apps", 0, 0L, 0L)
-                        }.sortedBy { it.label.lowercase() }
+                        }.sortedBy { it.label.lowercase() }.take(100)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -310,6 +326,11 @@ class MainActivity : AppCompatActivity() {
         // Explicit intents may originate from another app; never bypass lock/startup checks.
         if (!configReady || !GothwadApplication.hasUnlockedDeviceThisProcess || !normalDesktopStarted) return
         when (intent.action) {
+            Intent.ACTION_MAIN -> if (intent.hasCategory(Intent.CATEGORY_HOME)) {
+                val host = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+                (host?.childFragmentManager?.primaryNavigationFragment as? com.gothwad.computer.ui.pc.PcLauncherFragment)
+                    ?.returnToDesktop()
+            }
             "ACTION_SEARCH" -> {
                 SearchDialogFragment.newInstance(
                     apps = allApps,
@@ -370,11 +391,19 @@ class MainActivity : AppCompatActivity() {
         val configStore = ConfigStore(this)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                configStore.flow.collectLatest { config ->
+                configStore.flow.catch { error ->
+                    if (error is CancellationException) throw error
+                    onConfigurationUnavailable()
+                }.collectLatest { config ->
                     currentConfig = config
                 }
             }
         }
+    }
+
+    fun onConfigurationUnavailable() {
+        if (safeBinding != null && !configReady) return
+        showRecovery(configReadable = false)
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

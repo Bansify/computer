@@ -66,8 +66,13 @@ import android.graphics.drawable.Drawable
 import com.gothwad.computer.service.FloatingTaskbarService
 import com.gothwad.computer.ui.view.SmoothOutlineProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -92,6 +97,18 @@ class PcLauncherFragment : Fragment() {
     private var activePopupWindow: PopupWindow? = null
     private var floatingWindowManager: FloatingWindowManager? = null
     private var isTaskbarUserHidden: Boolean = false
+    private var flyoutReturnFocus: View? = null
+    private var wallpaperJob: Job? = null
+    private var refreshJob: Job? = null
+    private val appLoadMutex = Mutex()
+    private var packageReceiverRegistered = false
+    private var batteryReceiverRegistered = false
+
+    private val packageReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            requestAppsRefresh()
+        }
+    }
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -117,6 +134,12 @@ class PcLauncherFragment : Fragment() {
         observeData()
         startClockUpdates()
         registerStatusListeners()
+        registerPackageListener()
+        binding.btnStart.post {
+            if (_binding != null && !binding.root.isInTouchMode && binding.root.findFocus() == null) {
+                binding.btnStart.requestFocus()
+            }
+        }
 
         binding.recyclerDesktopGrid.post {
             if (_binding != null) {
@@ -127,8 +150,29 @@ class PcLauncherFragment : Fragment() {
 
     private fun registerStatusListeners() {
         val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-        val stickyIntent = requireContext().registerReceiver(batteryReceiver, filter)
+        val stickyIntent = runCatching {
+            requireContext().registerReceiver(batteryReceiver, filter).also { batteryReceiverRegistered = true }
+        }.getOrNull()
         updateBatteryStatus(stickyIntent)
+    }
+
+    private fun registerPackageListener() {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_CHANGED)
+            addDataScheme("package")
+        }
+        runCatching {
+            ContextCompat.registerReceiver(requireContext(), packageReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+            packageReceiverRegistered = true
+        }
+    }
+
+    private fun requestAppsRefresh() {
+        if (_binding == null) return
+        refreshJob?.cancel()
+        refreshJob = viewLifecycleOwner.lifecycleScope.launch { loadApps() }
     }
 
     private fun updateBatteryStatus(intent: Intent?) {
@@ -277,13 +321,12 @@ class PcLauncherFragment : Fragment() {
         }
 
         // Handle Back button gracefully for normal PC emulator app
-        var lastBackPressTime = 0L
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (binding.containerStartMenu.visibility == View.VISIBLE ||
                     binding.containerQuickSettings.visibility == View.VISIBLE ||
                     activePopupWindow?.isShowing == true) {
-                    closeAllFlyouts()
+                    closeAllFlyouts(restoreFocus = true)
                     return
                 }
 
@@ -293,13 +336,9 @@ class PcLauncherFragment : Fragment() {
                     return
                 }
 
-                val currentTime = System.currentTimeMillis()
-                if (currentTime - lastBackPressTime < 2000L) {
-                    requireActivity().finish()
-                } else {
-                    lastBackPressTime = currentTime
-                    Toast.makeText(requireContext(), "Press BACK again to exit", Toast.LENGTH_SHORT).show()
-                }
+                // A Home app should not finish and leave the user with an empty screen.
+                if (binding.btnStart.isShown) binding.btnStart.requestFocus()
+                else binding.btnFloatingCornerTab.requestFocus()
             }
         })
 
@@ -454,9 +493,10 @@ class PcLauncherFragment : Fragment() {
             return
         }
         if (binding.containerStartMenu.visibility == View.VISIBLE) {
-            binding.containerStartMenu.visibility = View.GONE
+            closeAllFlyouts(restoreFocus = true)
         } else {
             closeAllFlyouts()
+            flyoutReturnFocus = binding.root.findFocus()
             binding.containerStartMenu.alpha = 0f
             binding.containerStartMenu.translationY = 20f
             binding.containerStartMenu.visibility = View.VISIBLE
@@ -465,6 +505,7 @@ class PcLauncherFragment : Fragment() {
                 .translationY(0f)
                 .setDuration(160)
                 .start()
+            binding.viewStartMenu.startSearchContainer.requestFocus()
         }
     }
 
@@ -473,9 +514,10 @@ class PcLauncherFragment : Fragment() {
             return
         }
         if (binding.containerQuickSettings.visibility == View.VISIBLE) {
-            binding.containerQuickSettings.visibility = View.GONE
+            closeAllFlyouts(restoreFocus = true)
         } else {
             closeAllFlyouts()
+            flyoutReturnFocus = binding.root.findFocus()
             binding.containerQuickSettings.alpha = 0f
             binding.containerQuickSettings.translationY = 20f
             binding.containerQuickSettings.visibility = View.VISIBLE
@@ -484,14 +526,31 @@ class PcLauncherFragment : Fragment() {
                 .translationY(0f)
                 .setDuration(160)
                 .start()
+            binding.viewQuickSettings.tileQsWifi.requestFocus()
         }
     }
 
-    private fun closeAllFlyouts() {
+    private fun closeAllFlyouts(restoreFocus: Boolean = false) {
+        val previousFocus = flyoutReturnFocus
+        flyoutReturnFocus = null
         activePopupWindow?.dismiss()
         activePopupWindow = null
         binding.containerStartMenu.visibility = View.GONE
         binding.containerQuickSettings.visibility = View.GONE
+        if (restoreFocus && previousFocus?.isAttachedToWindow == true && previousFocus.isShown) {
+            previousFocus.requestFocus()
+        }
+    }
+
+    /** Home press minimizes in-app windows, dismisses flyouts and returns to a visible focus. */
+    fun returnToDesktop() {
+        if (_binding == null) return
+        closeAllFlyouts()
+        floatingWindowManager?.getActiveWindows()?.filter { !it.isMinimized }?.forEach {
+            floatingWindowManager?.minimizeWindow(it.id)
+        }
+        if (binding.btnStart.isShown) binding.btnStart.requestFocus()
+        else binding.btnFloatingCornerTab.requestFocus()
     }
 
     private fun toggleTaskbarVisibility() {
@@ -840,6 +899,11 @@ class PcLauncherFragment : Fragment() {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         }
         activePopupWindow = popup
+        val returnFocus = binding.root.findFocus()
+        popup.setOnDismissListener {
+            if (activePopupWindow === popup) activePopupWindow = null
+            if (returnFocus?.isAttachedToWindow == true && returnFocus.isShown) returnFocus.requestFocus()
+        }
 
         // 1. PC UI Scale Option
         menuBinding.itemPcUiScale.setOnClickListener {
@@ -924,6 +988,7 @@ class PcLauncherFragment : Fragment() {
         }
 
         showPopupAtSafeCoords(popup, touchX, touchY, (260 * resources.displayMetrics.density).toInt(), (360 * resources.displayMetrics.density).toInt())
+        menuBinding.itemPcUiScale.requestFocus()
     }
 
     // Windows / Linux style App Icon Context Menu
@@ -969,6 +1034,10 @@ class PcLauncherFragment : Fragment() {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         }
         activePopupWindow = popup
+        popup.setOnDismissListener {
+            if (activePopupWindow === popup) activePopupWindow = null
+            if (view.isAttachedToWindow && view.isShown) view.requestFocus()
+        }
 
         menuBinding.itemAppOpen.setOnClickListener {
             popup.dismiss()
@@ -1050,6 +1119,7 @@ class PcLauncherFragment : Fragment() {
         }
 
         showPopupAtSafeCoords(popup, touchX, touchY, (220 * resources.displayMetrics.density).toInt(), (320 * resources.displayMetrics.density).toInt())
+        menuBinding.itemAppOpen.requestFocus()
     }
 
     private fun showPopupAtSafeCoords(popup: PopupWindow, rawX: Float, rawY: Float, widthPx: Int, heightPx: Int) {
@@ -1060,8 +1130,8 @@ class PcLauncherFragment : Fragment() {
         val x = if (rawX > 0) rawX.toInt() else (screenWidth / 2 - widthPx / 2)
         val y = if (rawY > 0) rawY.toInt() else (screenHeight / 2 - heightPx / 2)
 
-        val safeX = x.coerceIn(8, screenWidth - widthPx - 8)
-        val safeY = y.coerceIn(8, screenHeight - heightPx - 48)
+        val safeX = x.coerceIn(8, (screenWidth - widthPx - 8).coerceAtLeast(8))
+        val safeY = y.coerceIn(8, (screenHeight - heightPx - 48).coerceAtLeast(8))
 
         popup.showAtLocation(binding.pcLauncherRoot, Gravity.NO_GRAVITY, safeX, safeY)
     }
@@ -1399,7 +1469,10 @@ class PcLauncherFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    configStore.flow.collectLatest { config ->
+                    configStore.flow.catch { error ->
+                        if (error is CancellationException) throw error
+                        (activity as? com.gothwad.computer.MainActivity)?.onConfigurationUnavailable()
+                    }.collectLatest { config ->
                         val prevConfig = currentConfig
                         currentConfig = config
                         applyWallpaper()
@@ -1458,27 +1531,35 @@ class PcLauncherFragment : Fragment() {
     }
 
     private fun applyWallpaper() {
-        lifecycleScope.launch {
-            if (currentConfig.pcUseCustomWallpaper) {
-                val file = File(requireContext().filesDir, "wallpaper_pc.jpg")
-                val fallbackFile = File(requireContext().filesDir, "wallpaper.jpg")
-                val target = if (file.exists()) file else fallbackFile
-                if (target.exists()) {
-                    val bmp = withContext(Dispatchers.IO) {
-                        BitmapFactory.decodeFile(target.absolutePath)
+        wallpaperJob?.cancel()
+        val config = currentConfig
+        val context = context ?: return
+        val width = resources.displayMetrics.widthPixels.coerceIn(1, 3840)
+        val height = resources.displayMetrics.heightPixels.coerceIn(1, 2160)
+        wallpaperJob = viewLifecycleOwner.lifecycleScope.launch {
+            val bitmap = if (config.pcUseCustomWallpaper) {
+                val file = File(context.filesDir, "wallpaper_pc.jpg")
+                val fallback = File(context.filesDir, "wallpaper.jpg")
+                val target = if (file.exists()) file else fallback
+                if (target.exists()) withContext(Dispatchers.IO) {
+                    try {
+                        com.gothwad.computer.data.BitmapSampling.decodeFile(target.absolutePath, width, height)
+                    } catch (e: Exception) {
+                        null
+                    } catch (e: OutOfMemoryError) {
+                        null
                     }
-                    if (bmp != null) {
-                        binding.imgWallpaper.setImageBitmap(bmp)
-                        binding.imgWallpaper.visibility = View.VISIBLE
-                        return@launch
-                    }
-                }
+                } else null
+            } else null
+            val currentBinding = _binding ?: return@launch
+            if (bitmap != null) {
+                currentBinding.imgWallpaper.setImageBitmap(bitmap)
+            } else {
+                val idx = config.pcWallpaper.coerceIn(0, PC_WALLPAPERS.size - 1)
+                runCatching { currentBinding.imgWallpaper.setImageResource(PC_WALLPAPERS[idx].resId) }
+                    .onFailure { currentBinding.imgWallpaper.setImageDrawable(null) }
             }
-
-            val idx = currentConfig.pcWallpaper.coerceIn(0, PC_WALLPAPERS.size - 1)
-            val preset = PC_WALLPAPERS[idx]
-            binding.imgWallpaper.setImageResource(preset.resId)
-            binding.imgWallpaper.visibility = View.VISIBLE
+            currentBinding.imgWallpaper.visibility = View.VISIBLE
         }
     }
 
@@ -1509,7 +1590,19 @@ class PcLauncherFragment : Fragment() {
     }
 
     private suspend fun loadApps() {
-        val scanned = AppRepository.scan(requireContext()).toMutableList()
+        try {
+            appLoadMutex.withLock { loadAppsInternal() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("PcLauncher", "Unable to update app list")
+        }
+    }
+
+    private suspend fun loadAppsInternal() {
+        val scanned = try { AppRepository.scan(requireContext()).toMutableList() }
+        catch (e: CancellationException) { throw e }
+        catch (e: Exception) { mutableListOf() }
 
         val ctx = requireContext()
         val filesIcon = ContextCompat.getDrawable(ctx, R.drawable.ic_taskbar_files)?.toBitmap(96, 96)
@@ -1527,8 +1620,8 @@ class PcLauncherFragment : Fragment() {
                     icon = filesIcon,
                     autoCategory = "productivity",
                     tile = 0xFF4FA7FA.toInt(),
-                    stamp = System.currentTimeMillis(),
-                    firstInstall = System.currentTimeMillis()
+                    stamp = 0L,
+                    firstInstall = 0L
                 )
             )
         }
@@ -1542,8 +1635,8 @@ class PcLauncherFragment : Fragment() {
                     icon = browserIcon,
                     autoCategory = "apps",
                     tile = 0xFF60A5FA.toInt(),
-                    stamp = System.currentTimeMillis(),
-                    firstInstall = System.currentTimeMillis()
+                    stamp = 0L,
+                    firstInstall = 0L
                 )
             )
         }
@@ -1557,8 +1650,8 @@ class PcLauncherFragment : Fragment() {
                     icon = storeIcon,
                     autoCategory = "apps",
                     tile = 0xFF0078D4.toInt(),
-                    stamp = System.currentTimeMillis(),
-                    firstInstall = System.currentTimeMillis()
+                    stamp = 0L,
+                    firstInstall = 0L
                 )
             )
         }
@@ -1593,8 +1686,8 @@ class PcLauncherFragment : Fragment() {
                         icon = iconBmp,
                         autoCategory = "apps",
                         tile = 0xFF0284C7.toInt(),
-                        stamp = System.currentTimeMillis(),
-                        firstInstall = System.currentTimeMillis()
+                        stamp = 0L,
+                        firstInstall = 0L
                     )
                 )
             }
@@ -1619,7 +1712,31 @@ class PcLauncherFragment : Fragment() {
             visible
         }
 
+        val grid = binding.recyclerDesktopGrid
+        val focusedItem = grid.focusedChild
+        val oldPosition = focusedItem?.let { grid.getChildAdapterPosition(it) } ?: RecyclerView.NO_POSITION
+        val oldPackage = desktopAdapter?.getCurrentList()?.getOrNull(oldPosition)?.pkg
         desktopAdapter?.updateData(sorted, currentConfig)
+        startMenuAdapter?.submitList(visible)
+        if (oldPosition != RecyclerView.NO_POSITION) {
+            val target = FocusRestorePolicy.position(sorted.map { it.pkg }, oldPackage, oldPosition)
+            grid.post {
+                if (_binding != null && (grid.hasFocus() || binding.root.findFocus() == null)) {
+                    if (target == null) binding.btnStart.requestFocus()
+                    else {
+                        val targetView = grid.findViewHolderForAdapterPosition(target)?.itemView
+                        if (targetView == null) {
+                            grid.scrollToPosition(target)
+                            grid.post {
+                                if (_binding != null && (grid.hasFocus() || binding.root.findFocus() == null)) {
+                                    grid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                                }
+                            }
+                        } else targetView.requestFocus()
+                    }
+                }
+            }
+        }
     }
 
     private fun getAvailableTaskbarPinnedWidth(): Int {
@@ -1663,15 +1780,24 @@ class PcLauncherFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (currentConfig.pcOverlayTaskbarEnabled && FloatingTaskbarService.canDrawOverlays(requireContext())) {
-            FloatingTaskbarService.startIfEnabled(requireContext())
+        runCatching {
+            if (currentConfig.pcOverlayTaskbarEnabled && FloatingTaskbarService.canDrawOverlays(requireContext())) {
+                FloatingTaskbarService.startIfEnabled(requireContext())
+            }
         }
+        requestAppsRefresh()
     }
 
     override fun onDestroyView() {
         floatingWindowManager?.closeAll()
         floatingWindowManager = null
-        requireContext().unregisterReceiver(batteryReceiver)
+        if (batteryReceiverRegistered) runCatching { requireContext().unregisterReceiver(batteryReceiver) }
+        if (packageReceiverRegistered) runCatching { requireContext().unregisterReceiver(packageReceiver) }
+        batteryReceiverRegistered = false
+        packageReceiverRegistered = false
+        refreshJob?.cancel()
+        wallpaperJob?.cancel()
+        flyoutReturnFocus = null
         activePopupWindow?.dismiss()
         activePopupWindow = null
         super.onDestroyView()

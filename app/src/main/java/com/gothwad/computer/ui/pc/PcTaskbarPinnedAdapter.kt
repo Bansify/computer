@@ -45,6 +45,7 @@ class PcTaskbarPinnedAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(app: AppEntry) {
+            binding.root.contentDescription = app.label
             val density = binding.root.resources.displayMetrics.density
 
             // Apply dynamic sizing if configured

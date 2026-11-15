@@ -34,6 +34,7 @@ class PcStartMenuAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(app: AppEntry) {
+            binding.root.contentDescription = app.label
             val density = binding.root.resources.displayMetrics.density
 
             // Compact 64dp cell for start menu

@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.DiffUtil
 import com.gothwad.computer.R
 import com.gothwad.computer.data.AppEntry
 import com.gothwad.computer.data.LauncherConfig
@@ -23,12 +24,21 @@ class PcDesktopIconAdapter(
     private val appsList = mutableListOf<AppEntry>()
     private var config: LauncherConfig = LauncherConfig()
 
-    @SuppressLint("NotifyDataSetChanged")
     fun updateData(newApps: List<AppEntry>, newConfig: LauncherConfig) {
+        val oldApps = appsList.toList()
+        val oldConfig = config
+        val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = oldApps.size
+            override fun getNewListSize() = newApps.size
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int) =
+                oldApps[oldItemPosition].pkg == newApps[newItemPosition].pkg
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int) =
+                oldApps[oldItemPosition] == newApps[newItemPosition] && oldConfig == newConfig
+        })
         appsList.clear()
         appsList.addAll(newApps)
         config = newConfig
-        notifyDataSetChanged()
+        diff.dispatchUpdatesTo(this)
     }
 
     fun moveItem(fromPosition: Int, toPosition: Int) {
@@ -104,6 +114,7 @@ class PcDesktopIconAdapter(
             // Custom Display Name or Default
             val displayName = config.pcCustomLabels[app.pkg] ?: app.label
             binding.tvAppLabel.text = displayName
+            binding.root.contentDescription = displayName
 
             // Show or Hide labels
             if (config.pcShowLabels) {
@@ -166,7 +177,12 @@ class PcDesktopIconAdapter(
 
             // Touch Long Click / Hold triggers Drag OR Context Menu
             binding.root.setOnLongClickListener { v ->
-                onAppContextMenu(app, v, lastTouchX, lastTouchY)
+                // D-pad long-press has no pointer coordinates: anchor to the focused item.
+                val location = IntArray(2)
+                v.getLocationOnScreen(location)
+                val x = if (lastTouchX > 0f) lastTouchX else location[0] + v.width / 2f
+                val y = if (lastTouchY > 0f) lastTouchY else location[1] + v.height / 2f
+                onAppContextMenu(app, v, x, y)
                 true
             }
         }

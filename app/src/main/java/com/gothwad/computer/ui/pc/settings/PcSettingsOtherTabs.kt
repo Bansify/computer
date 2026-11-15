@@ -387,11 +387,11 @@ class PcSettingsOtherTabs(
             parent = container,
             context = context,
             iconRes = R.drawable.ic_win_update,
-            title = "Startup Apps",
-            subtitle = "${config.pcStartupApps.size} apps configured to start with PC Emulator",
-            value = "${config.pcStartupApps.size} Apps"
+            title = "Startup Apps (not available yet)",
+            subtitle = "Saved selections are retained but apps do not start automatically.",
+            value = "Unavailable"
         ) {
-            showStartupAppsDialog()
+            Toast.makeText(context, "Automatic startup is not implemented on this device.", Toast.LENGTH_LONG).show()
         }
 
         // Android remains in control of the default Home selection.

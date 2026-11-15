@@ -62,83 +62,48 @@ object UsageTracker {
 // ==========================================
 data class BluetoothDeviceStatus(
     val connected: Boolean = false,
-    val name: String = "Remote",
-    val batteryLevel: Int = -1, // 0..100 or -1 if unknown
-    val isRemote: Boolean = true,
+    val name: String = "Bluetooth device",
+    val batteryLevel: Int = -1, // -1 means unknown; never invent a percentage.
+    val isRemote: Boolean = false,
+    val statusKnown: Boolean = false,
 )
 
+/** ACL broadcasts are observations, not a reliable initial connection snapshot on all OEMs. */
 fun bluetoothStatusFlow(context: Context): Flow<BluetoothDeviceStatus> = callbackFlow {
-    fun queryStatus(): BluetoothDeviceStatus {
-        return runCatching {
-            val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-            val adapter = bm?.adapter ?: BluetoothAdapter.getDefaultAdapter()
-
-            var connectedRemote: BluetoothDevice? = null
-            var bestBattery = -1
-
-            if (adapter != null && adapter.isEnabled) {
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-                    ContextCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-                ) {
-                    val bonded = runCatching { adapter.bondedDevices }.getOrNull().orEmpty()
-                    for (dev in bonded) {
-                        // Check battery level via reflection or extra
-                        val battery = runCatching {
-                            val method = dev.javaClass.getMethod("getBatteryLevel")
-                            method.invoke(dev) as? Int ?: -1
-                        }.getOrDefault(-1)
-
-                        if (battery in 0..100) {
-                            connectedRemote = dev
-                            bestBattery = battery
-                            break
-                        }
-                    }
-                    if (connectedRemote == null && bonded.isNotEmpty()) {
-                        connectedRemote = bonded.firstOrNull()
+    var status = BluetoothDeviceStatus()
+    trySend(status)
+    val receiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, intent: Intent?) {
+            when (intent?.action) {
+                BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                    @Suppress("DEPRECATION")
+                    val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                    val name = runCatching { device?.name }.getOrNull() ?: "Bluetooth device"
+                    status = BluetoothDeviceStatus(connected = true, name = name, statusKnown = true)
+                }
+                BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                    // There may be other devices; do not claim all devices are disconnected.
+                    status = BluetoothDeviceStatus()
+                }
+                BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                    if (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR) == BluetoothAdapter.STATE_OFF) {
+                        status = BluetoothDeviceStatus(connected = false, statusKnown = true)
                     }
                 }
             }
-
-            if (connectedRemote != null) {
-                BluetoothDeviceStatus(
-                    connected = true,
-                    name = runCatching { connectedRemote.name }.getOrNull() ?: "Remote",
-                    batteryLevel = if (bestBattery >= 0) bestBattery else 85, // estimate for connected TV remote
-                    isRemote = true,
-                )
-            } else {
-                // Default TV remote active state
-                BluetoothDeviceStatus(
-                    connected = true,
-                    name = "TV Remote",
-                    batteryLevel = -1,
-                    isRemote = true,
-                )
-            }
-        }.getOrDefault(BluetoothDeviceStatus(connected = true, name = "TV Remote", batteryLevel = -1))
-    }
-
-    trySend(queryStatus())
-
-    val receiver = object : BroadcastReceiver() {
-        override fun onReceive(c: Context?, intent: Intent?) {
-            trySend(queryStatus())
+            trySend(status)
         }
     }
-
     val filter = IntentFilter().apply {
         addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
         addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
-        @Suppress("DEPRECATION")
-        addAction("android.bluetooth.device.action.BATTERY_LEVEL_CHANGED")
         addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
     }
-
-    runCatching { context.registerReceiver(receiver, filter) }
-    awaitClose {
-        runCatching { context.unregisterReceiver(receiver) }
-    }
+    // Bluetooth system broadcasts may originate outside the system UID. Events only inform UI.
+    val registered = runCatching {
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+    }.isSuccess
+    awaitClose { if (registered) runCatching { context.unregisterReceiver(receiver) } }
 }
 
 // ==========================================
