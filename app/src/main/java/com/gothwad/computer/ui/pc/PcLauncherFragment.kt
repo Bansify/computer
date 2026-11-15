@@ -101,6 +101,7 @@ class PcLauncherFragment : Fragment() {
     private var wallpaperJob: Job? = null
     private var refreshJob: Job? = null
     private val appLoadMutex = Mutex()
+    private val attemptedPwaIcons = mutableSetOf<String>()
     private var packageReceiverRegistered = false
     private var batteryReceiverRegistered = false
 
@@ -1542,30 +1543,27 @@ class PcLauncherFragment : Fragment() {
         val context = context ?: return
         val width = resources.displayMetrics.widthPixels.coerceIn(1, 3840)
         val height = resources.displayMetrics.heightPixels.coerceIn(1, 2160)
+        val presetId = PC_WALLPAPERS[config.pcWallpaper.coerceIn(0, PC_WALLPAPERS.size - 1)].resId
         wallpaperJob = viewLifecycleOwner.lifecycleScope.launch {
-            val bitmap = if (config.pcUseCustomWallpaper) {
-                val file = File(context.filesDir, "wallpaper_pc.jpg")
-                val fallback = File(context.filesDir, "wallpaper.jpg")
-                val target = if (file.exists()) file else fallback
-                if (target.exists()) withContext(Dispatchers.IO) {
-                    try {
-                        com.gothwad.computer.data.BitmapSampling.decodeFile(target.absolutePath, width, height)
-                    } catch (e: Exception) {
-                        null
-                    } catch (e: OutOfMemoryError) {
-                        null
-                    }
-                } else null
-            } else null
-            val currentBinding = _binding ?: return@launch
-            if (bitmap != null) {
-                currentBinding.imgWallpaper.setImageBitmap(bitmap)
-            } else {
-                val idx = config.pcWallpaper.coerceIn(0, PC_WALLPAPERS.size - 1)
-                runCatching { currentBinding.imgWallpaper.setImageResource(PC_WALLPAPERS[idx].resId) }
-                    .onFailure { currentBinding.imgWallpaper.setImageDrawable(null) }
+            val bitmap = withContext(Dispatchers.IO) {
+                try {
+                    val custom = if (config.pcUseCustomWallpaper) {
+                        val file = File(context.filesDir, "wallpaper_pc.jpg")
+                        val fallback = File(context.filesDir, "wallpaper.jpg")
+                        val target = if (file.exists()) file else fallback
+                        if (target.exists()) com.gothwad.computer.data.BitmapSampling.decodeFile(target.absolutePath, width, height) else null
+                    } else null
+                    custom ?: com.gothwad.computer.data.BitmapSampling.decodeResource(context.resources, presetId, width, height)
+                } catch (e: Exception) {
+                    null
+                } catch (e: OutOfMemoryError) {
+                    null
+                }
             }
-            currentBinding.imgWallpaper.visibility = View.VISIBLE
+            val currentBinding = _binding ?: return@launch
+            currentBinding.imgWallpaper.setImageBitmap(bitmap)
+            currentBinding.imgWallpaper.visibility = if (bitmap == null) View.GONE else View.VISIBLE
+            // The root's solid black background remains usable if decoding failed.
         }
     }
 
@@ -1667,11 +1665,13 @@ class PcLauncherFragment : Fragment() {
         for (pkg in pwaPkgs) {
             if (scanned.none { it.pkg == pkg }) {
                 val label = currentConfig.pcCustomLabels[pkg] ?: WebAppManager.formatUrl(pkg.removePrefix("pwa://")).removePrefix("https://").removePrefix("http://")
-                val iconBmp = WebAppManager.loadSavedIcon(ctx, pkg)
-                    ?: WebAppManager.generateFallbackSquircleIcon(label)
+                val iconBmp = withContext(Dispatchers.IO) {
+                    runCatching { WebAppManager.loadSavedIcon(ctx, pkg) }.getOrNull()
+                        ?: WebAppManager.generateFallbackSquircleIcon(label)
+                }
 
                 // Auto-fetch real icon in background if missing
-                if (!WebAppManager.hasSavedIcon(ctx, pkg)) {
+                if (!WebAppManager.hasSavedIcon(ctx, pkg) && attemptedPwaIcons.add(pkg)) {
                     val rawUrl = pkg.removePrefix("pwa://")
                     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                         val (_, fetched) = WebAppManager.fetchFaviconAndTitle(rawUrl)
@@ -1803,6 +1803,7 @@ class PcLauncherFragment : Fragment() {
         packageReceiverRegistered = false
         refreshJob?.cancel()
         wallpaperJob?.cancel()
+        attemptedPwaIcons.clear()
         flyoutReturnFocus = null
         activePopupWindow?.dismiss()
         activePopupWindow = null

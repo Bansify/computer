@@ -38,6 +38,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/safe_home_settings" />
+        <Button
+            android:id="@+id/safe_diagnostics"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/safe_home_share_diagnostics" />
         <TextView
             android:id="@+id/safe_apps_label"
             android:layout_width="match_parent"

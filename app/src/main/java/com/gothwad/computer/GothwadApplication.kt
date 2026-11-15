@@ -14,24 +14,22 @@ import java.util.Locale
 class GothwadApplication : Application() {
 
     override fun attachBaseContext(base: Context) {
-        super.attachBaseContext(com.gothwad.computer.data.DpiHelper.wrapContext(base))
+        super.attachBaseContext(runCatching { com.gothwad.computer.data.DpiHelper.wrapContext(base) }.getOrDefault(base))
     }
 
     override fun onCreate() {
         super.onCreate()
-        if (com.gothwad.computer.data.DpiHelper.isCustomDpiEnabled(this)) {
-            com.gothwad.computer.data.DpiHelper.applyToResources(
-                resources,
-                com.gothwad.computer.data.DpiHelper.getCustomDpiValue(this)
-            )
-        }
         val currentProc = com.gothwad.computer.data.ProcessHelper.currentProcessName()
+        // Install as early as possible, before optional display configuration.
+        if (currentProc.isEmpty() || currentProc == packageName) setupCrashLogging()
         Log.i(TAG, "GothwadApplication initialized in process: $currentProc")
-
-        // Only initialize main process handlers from the main process
-        if (currentProc.isEmpty() || currentProc == packageName) {
-            setupCrashLogging()
-        }
+        runCatching {
+            if (com.gothwad.computer.data.DpiHelper.isCustomDpiEnabled(this)) {
+                com.gothwad.computer.data.DpiHelper.applyToResources(
+                    resources, com.gothwad.computer.data.DpiHelper.getCustomDpiValue(this)
+                )
+            }
+        }.onFailure { Log.w(TAG, "Custom display density unavailable") }
     }
 
     override fun onTrimMemory(level: Int) {
@@ -89,7 +87,8 @@ class GothwadApplication : Application() {
 
     companion object {
         private const val TAG = "GothwadApplication"
-        private const val CRASH_LOG_FILE = "gothwad_crash.log"
+        // New file avoids exporting old unredacted logs written by earlier versions.
+        const val CRASH_LOG_FILE = "gothwad_crash_v2.log"
 
         /** In-memory flag: true once device lock is satisfied for the current process lifetime */
         @Volatile

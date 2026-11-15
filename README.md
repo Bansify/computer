@@ -2,7 +2,7 @@
 
 Gothwad Computer is a Kotlin Android application that presents a desktop-style environment with an app grid, taskbar, floating built-in windows, file manager, browser and web-app shortcuts. It runs on Android devices (including devices without a touchscreen); it is not a Windows emulator and does not run Windows executables.
 
-> **Current state:** The manifest registers a Home candidate; the user must choose it in Android settings. Initial recovery support is not yet verified on real TVs or tablets: keep another launcher installed and do not rely on this as your only Home. Some settings and legacy TV-related configuration are incomplete. See the [analysis](docs/PROJECT_ANALYSIS.md) and [Phase 1 test protocol](docs/PHASE1_TESTING.md).
+> **Current state:** The manifest registers a Home candidate; the user must choose it in Android settings. Initial recovery support is not yet verified on real TVs or tablets: keep another launcher installed and do not rely on this as your only Home. Some settings and legacy TV-related configuration are incomplete. See the [analysis](docs/PROJECT_ANALYSIS.md) and [Phase 1](docs/PHASE1_TESTING.md) / [Phase 2](docs/PHASE2_TESTING.md) test protocols.
 
 ## What is in the app
 

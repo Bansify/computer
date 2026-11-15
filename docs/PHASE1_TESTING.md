@@ -25,10 +25,10 @@ Record commit/build, build variant/signature, date, device model/OEM, Android ve
   # Repeat force-stop + start once, then launch normally from the app list.
   ```
 
-  This intentionally crashes the debug app; it is absent from the release implementation. Do not run it on a user's only Home. After two uncaught startup failures, manually relaunch: safe screen should offer retry, Android settings, default Home and a simple app list after successful lock check. After retry, 30 seconds continuously resumed without a startup failure should clear the recorded count. No automatic relaunch is attempted.
+  This intentionally crashes the debug app; it is absent from the release implementation. Do not run it on a user's only Home. After two uncaught startup failures, manually relaunch: safe screen should offer retry, Android settings, default Home, explicit redacted diagnostics sharing and a simple app list (up to 100 entries) after successful lock check. After retry, 30 seconds continuously resumed without a startup failure should clear the recorded count. No automatic relaunch is attempted.
 - Current detection covers recorded uncaught startup exceptions and synchronously caught desktop startup failures; it does **not** reliably detect process kills, ANRs, native crashes, exceptions before the handler is installed or crashes after the startup window. Safe mode is in the same app/process and can itself fail. Use alternate Home as fallback.
 - Test remote focus, center/Back, touch, keyboard and mouse on recovery; lock/app-lock paths, denied overlay/notification/usage access, offline startup, missing system settings activities and OEM Home settings. Verify no unwanted data erase, lock bypass or restart loop.
-- Phase 1 does not yet include config/icon/wallpaper fault-injection fixtures, automated device tests, a diagnostic export flow or measured performance budgets. Do not mark the phase gate complete until implemented or explicitly reviewed and real-device evidence is recorded.
+- Phase 1 does not yet include config/icon/wallpaper fault-injection fixtures or measured real-device performance budgets. Basic emulator instrumentation exists; diagnostics sharing covers only the redacted v2 log, not old logs. Do not mark the phase gate complete until implemented or explicitly reviewed and real-device evidence is recorded.
 
 ## Measurements to capture before choosing budgets
 

@@ -29,7 +29,7 @@ Implementation + relevant automated tests + device verification + accessibility/
 
 **Outcome:** A testable Android HOME candidate that opens a minimal usable screen even when optional components fail, with a real escape route. Do not recommend it as the user's only Home yet.
 
-**Progress (2026-11-15):** HOME manifest registration, Home settings route, guarded startup, non-destructive config decode, initial crash-count safe screen, a debug-only startup-fault fixture and build-only CI are implemented but not device-verified. Earlier build-only CI passed at `ed62003`; check the latest run for the current commit. Config/icon/wallpaper fault fixtures, device/instrumentation checks, diagnostics export, performance budgets and full recovery/lock validation remain open. See [Phase 1 test protocol](docs/PHASE1_TESTING.md).
+**Progress (2026-11-15):** HOME manifest registration, Home settings route, guarded startup, non-destructive config decode, initial crash-count safe screen, a debug-only startup-fault fixture and build-only CI are implemented but not device-verified. Earlier build-only CI passed at `ed62003`; check the latest run for the current commit. Config/icon/wallpaper fault fixtures, real-device checks, performance budgets and full recovery/lock validation remain open. Initial emulator smoke tests and explicit redacted diagnostics sharing have been added; see the latest CI run for status. See [Phase 1 test protocol](docs/PHASE1_TESTING.md).
 
 ### 1A. Reproducible build and baseline
 
@@ -62,6 +62,8 @@ Implementation + relevant automated tests + device verification + accessibility/
 ## Phase 2 — Remote-first desktop, focus and core reliability
 
 **Outcome:** A remote-only user can navigate and recover the entire essential Home experience. Scanning and lifecycle work no longer jeopardize Home stability.
+
+**Progress (2026-11-15):** App scans are serialized with bounded artwork concurrency; package-change refresh, remote focus/flyout handling, Home/Back behavior, sampled wallpaper decode, lifecycle cleanup, memory trimming and Bluetooth/status fallbacks were added. Unit and emulator smoke tests were introduced. Full-screen remote accessibility, OEM/device tests, package-race stress, profiling and phase gates remain unverified; follow [Phase 2 test protocol](docs/PHASE2_TESTING.md).
 
 ### 2A. Focus/navigation contract
 

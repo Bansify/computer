@@ -207,8 +207,12 @@ object AppRepository {
     ): Bitmap? {
         val f = File(dir, name)
         if (f.exists()) {
-            val opts = BitmapFactory.Options().apply { inPreferredConfig = config }
-            BitmapFactory.decodeFile(f.absolutePath, opts)?.let { return it }
+            val width = if (config == Bitmap.Config.RGB_565) 320 else 128
+            val height = if (config == Bitmap.Config.RGB_565) 180 else 128
+            val cached = try { BitmapSampling.decodeFile(f.absolutePath, width, height, config) }
+            catch (e: Exception) { null }
+            catch (e: OutOfMemoryError) { null }
+            if (cached != null) return cached
         }
         val bmp = create() ?: return null
         runCatching {

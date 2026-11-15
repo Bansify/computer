@@ -2,6 +2,7 @@ package com.gothwad.computer
 
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ClipData
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
@@ -14,6 +15,7 @@ import androidx.navigation.fragment.NavHostFragment
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -44,6 +46,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Locale
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
@@ -87,16 +90,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun attachBaseContext(newBase: Context) {
-        val lang = newBase.getSharedPreferences(LOCALE_PREFS, MODE_PRIVATE)
-            .getString(LOCALE_KEY, "").orEmpty()
-        val contextWithLocale = if (lang.isEmpty()) newBase else applyLocale(newBase, lang)
-        val contextWithDpi = com.gothwad.computer.data.DpiHelper.wrapContext(contextWithLocale)
+        val lang = runCatching {
+            newBase.getSharedPreferences(LOCALE_PREFS, MODE_PRIVATE).getString(LOCALE_KEY, "").orEmpty()
+        }.getOrDefault("")
+        val contextWithLocale = if (lang.isEmpty()) newBase else runCatching { applyLocale(newBase, lang) }.getOrDefault(newBase)
+        val contextWithDpi = runCatching { com.gothwad.computer.data.DpiHelper.wrapContext(contextWithLocale) }.getOrDefault(contextWithLocale)
         super.attachBaseContext(contextWithDpi)
     }
 
     override fun applyOverrideConfiguration(overrideConfiguration: Configuration?) {
-        if (overrideConfiguration != null && com.gothwad.computer.data.DpiHelper.isCustomDpiEnabled(this)) {
-            overrideConfiguration.densityDpi = com.gothwad.computer.data.DpiHelper.getCustomDpiValue(this)
+        runCatching {
+            if (overrideConfiguration != null && com.gothwad.computer.data.DpiHelper.isCustomDpiEnabled(this)) {
+                overrideConfiguration.densityDpi = com.gothwad.computer.data.DpiHelper.getCustomDpiValue(this)
+            }
         }
         super.applyOverrideConfiguration(overrideConfiguration)
     }
@@ -109,11 +115,12 @@ class MainActivity : AppCompatActivity() {
         // Only the debug source set has a fault implementation; never crash recovery itself.
         if (!recoveryMode) StartupTestHooks.beforeStartup(intent)
 
-        if (com.gothwad.computer.data.DpiHelper.isCustomDpiEnabled(this)) {
-            com.gothwad.computer.data.DpiHelper.applyToResources(
-                resources,
-                com.gothwad.computer.data.DpiHelper.getCustomDpiValue(this)
-            )
+        runCatching {
+            if (com.gothwad.computer.data.DpiHelper.isCustomDpiEnabled(this)) {
+                com.gothwad.computer.data.DpiHelper.applyToResources(
+                    resources, com.gothwad.computer.data.DpiHelper.getCustomDpiValue(this)
+                )
+            }
         }
 
         // Handle Back when device is locked so it cannot be bypassed
@@ -272,8 +279,27 @@ class MainActivity : AppCompatActivity() {
         view.safeSystemSettings.setOnClickListener {
             if (!HomeSettings.openSystemSettings(this)) Toast.makeText(this, R.string.safe_home_no_settings, Toast.LENGTH_SHORT).show()
         }
+        view.safeDiagnostics.setOnClickListener { shareDiagnostics() }
         view.safeRetry.requestFocus()
         if (configReadable) loadSafeApps(view)
+    }
+
+    private fun shareDiagnostics() {
+        val file = File(filesDir, GothwadApplication.CRASH_LOG_FILE)
+        if (!file.isFile || file.length() == 0L) {
+            Toast.makeText(this, R.string.safe_home_no_diagnostics, Toast.LENGTH_SHORT).show()
+            return
+        }
+        runCatching {
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = ClipData.newRawUri("diagnostics", uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(send, getString(R.string.safe_home_share_diagnostics)))
+        }.onFailure { Toast.makeText(this, R.string.safe_home_share_unavailable, Toast.LENGTH_SHORT).show() }
     }
 
     private fun loadSafeApps(view: ViewSafeHomeBinding) {

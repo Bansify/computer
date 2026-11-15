@@ -303,6 +303,7 @@ class FloatingWindowManager(
 
     fun minimizeWindow(id: String) {
         val window = activeWindows.find { it.id == id } ?: return
+        val hadFocus = window.frameBinding?.root?.hasFocus() == true
         window.isMinimized = true
         window.frameBinding?.root?.visibility = View.GONE
 
@@ -315,6 +316,11 @@ class FloatingWindowManager(
             }
         }
         updateTaskbar()
+        if (hadFocus) {
+            val target = activeWindows.lastOrNull { !it.isMinimized }?.frameBinding?.btnWinClose
+                ?: returnFocus[id]?.get()
+            if (target?.isAttachedToWindow == true && target.isShown) target.requestFocus()
+        }
     }
 
     fun restoreWindow(id: String) {
@@ -386,6 +392,7 @@ class FloatingWindowManager(
 
     fun closeWindow(id: String) {
         val window = activeWindows.find { it.id == id } ?: return
+        val hadFocus = window.frameBinding?.root?.hasFocus() == true
         window.frameBinding?.root?.let {
             windowContainer.removeView(it)
         }
@@ -401,8 +408,9 @@ class FloatingWindowManager(
             }
         }
         updateTaskbar()
-        if (focusedWindowId == null && previousFocus?.isAttachedToWindow == true && previousFocus.isShown) {
-            previousFocus.requestFocus()
+        if (hadFocus) {
+            val target = activeWindows.lastOrNull { !it.isMinimized }?.frameBinding?.btnWinClose ?: previousFocus
+            if (target?.isAttachedToWindow == true && target.isShown) target.requestFocus()
         }
     }
 

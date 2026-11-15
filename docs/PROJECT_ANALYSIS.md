@@ -56,7 +56,7 @@ FloatingTaskbarService -> system overlay (when allowed) -> MainActivity actions
 
 ### Startup and state
 
-1. `GothwadApplication` applies custom DPI when configured and registers an uncaught-exception handler in the main process. It appends bounded, redacted exception types and code locations to internal `gothwad_crash.log`, deleting the previous file when it exceeds 64 KiB before the next append.
+1. `GothwadApplication` applies custom DPI when configured and registers an uncaught-exception handler in the main process. It appends bounded, redacted exception types and code locations to internal `gothwad_crash_v2.log`, deleting the previous file when it exceeds 64 KiB before the next append.
 2. `MainActivity` applies locale/DPI, inflates `ActivityMainBinding`, registers a package-change receiver, checks the launcher device lock and collects configuration with lifecycle-aware coroutines.
 3. Navigation loads `PcLauncherFragment`, which observes config and status, builds desktop/taskbar lists and opens built-in windows. `onDestroyView()` closes its managed windows.
 4. `ConfigStore` stores one serialized `LauncherConfig` JSON string in Preferences DataStore `launcher_config` / key `config_json`. Updates are transactional via `edit`. Unknown JSON keys are ignored. An absent config uses defaults; malformed/undecodable config now fails instead of being silently replaced, and startup offers a limited recovery screen. Device verification is pending.
@@ -76,7 +76,7 @@ FloatingTaskbarService -> system overlay (when allowed) -> MainActivity actions
 
 ### System integrations
 
-`ComputerNotificationListenerService` receives notifications after the user grants notification access and publishes state to UI. `FloatingTaskbarService` requires overlay access; platform background-service restrictions can affect its lifetime. `UsageTracker` computes most-used packages over the previous seven days only with usage access. `BackgroundMediaTracker` polls at roughly 1.5-second intervals and attempts to pause active sessions; success depends on Android permissions and the other app. Bluetooth status is best-effort: the current implementation can report a bonded device as connected and uses an estimated 85% battery in one fallback, so it is not authoritative telemetry.
+`ComputerNotificationListenerService` receives notifications after the user grants notification access and publishes state to UI. `FloatingTaskbarService` requires overlay access; platform background-service restrictions can affect its lifetime. `UsageTracker` computes most-used packages over the previous seven days only with usage access. `BackgroundMediaTracker` polls at roughly 1.5-second intervals and attempts to pause active sessions; success depends on Android permissions and the other app. Bluetooth status is best-effort: ACL events are observations, initial status/battery may be unknown, and bonding is not treated as proof of connection.
 
 ## 4. Storage and lifecycle
 
@@ -88,7 +88,7 @@ FloatingTaskbarService -> system overlay (when allowed) -> MainActivity actions
 | Web-app icons | internal `filesDir/webapp_icons/<MD5-of-URL>.png` | MD5 is used as a filename identifier, not for credential protection. |
 | Custom wallpaper | internal `wallpaper_pc.jpg`, fallback `wallpaper.jpg` | Referenced by desktop wallpaper loader. |
 | App artwork | cache `app_art/` | Disposable and recreated during scans. |
-| Crash trace | internal `gothwad_crash.log` | May contain sensitive context; handle as diagnostic data. |
+| Redacted crash trace | internal `gothwad_crash_v2.log` | Exception types and code locations only; user can explicitly share it from recovery. Older `gothwad_crash.log` is not exported. |
 | Cookies / WebView data | Android WebView-managed storage | Shared cookie manager; not a separate private browsing profile. |
 
 Manifest sets `allowBackup="true"`; backup behavior depends on Android version and platform defaults. Review backup rules and sensitive data before release. Clearing application data removes app-owned settings/files, not separately installed apps. Avoid promising data removal from external download locations or Android-managed services without device testing.
@@ -125,13 +125,13 @@ Priorities below are suggested engineering priorities, not verified exploit seve
 
 4. **Store JavaScript bridge trust boundary.** `GothwadStoreView` enables JavaScript/file access and attaches `AndroidStoreBridge`; its default `WebViewClient` does not explicitly restrict navigation. Bridge methods can modify shortcut state and open URLs. Audit all navigations and frames, constrain content to trusted local assets, validate bridge arguments/schemes, and encode values safely before `evaluateJavascript`. This is a potential attack surface; static review alone does not prove a reachable exploit.
 5. **Web content policy is permissive.** General WebView enables JavaScript, file/content access, third-party cookies, mixed-content compatibility and autoplay; manifest permits cleartext. Review requirements, limit file/content access and URL schemes, prefer HTTPS, and make any needed exceptions explicit. Test login, downloads and trusted local assets after tightening.
-6. **Data access and concurrency.** `AppRepository.scan` mutates a shared `HashSet` from multiple `Dispatchers.IO` async tasks; it is not thread-safe. Overlapping scans also share `memoryCache` and cache files. Use per-task results / synchronization and add concurrent-rescan tests. `BrowserDataStore` synchronizes individual reads/writes but read-modify-write sequences are not atomic across callers; exceptions on save are swallowed. Consider a single serialized transactional store and error reporting.
+6. **Data access and concurrency.** Phase 2 serializes `AppRepository.scan`, bounds artwork concurrency and creates cache keys before worker tasks. Concurrent-rescan/device stress verification remains pending. `BrowserDataStore` synchronizes individual reads/writes but read-modify-write sequences are not atomic across callers; exceptions on save are swallowed. Consider a single serialized transactional store and error reporting.
 7. **Build configuration needs verification.** Wrapper has been pinned to Gradle 8.7 while AGP is 8.5.2; verify the current CI/device evidence for this combination. Pin and test a supported combination, including configuration cache and CI. Release lint is disabled and lint does not abort on errors. Initial config/recovery policy unit tests were added in Phase 1; instrumentation/device coverage is still pending.
 8. **Release workflow overlap.** `build_apk.yml` runs on pushes to `main`/`master` or manual dispatch and creates a release; `release.yml` runs on `v*` tags or manual dispatch and also creates one. They have independent run numbers/version defaults and may conflict or produce inconsistent version codes. Validate the chosen release flow and monotonic version codes. Both workflows require signing secrets and fetch a replacement wrapper JAR if missing/corrupt; verify provenance/checksums rather than silently relying on an unverified download.
 
 ### P2 — maintainability / product clarity
 
-9. `launchOnBoot` and `pcStartupApps` are present in config/settings, but no boot receiver or execution path for startup apps was found. Treat them as unimplemented until behavior is added and tested. Other settings should be individually verified rather than assumed functional from UI labels.
+9. `launchOnBoot` and `pcStartupApps` remain in config, but no boot receiver or startup execution path was found. The Startup Apps setting is now labelled unavailable and retains old selections. Other settings should be individually verified rather than assumed functional from UI labels.
 10. Large UI files (e.g. `PcLauncherFragment`, `PcSettingsOtherTabs`, `WebAppView`, `FileManagerView`) combine UI, state and actions. Extract lifecycle-aware controllers/use cases, isolate persistence, and add automated tests before major refactors.
 11. Old README claims did not match the current native-Views build. Keep docs tied to manifest, navigation and Gradle changes. Repository has no `LICENSE` file; owner should explicitly decide license.
 
@@ -185,7 +185,7 @@ These are intended commands, not evidence of successful execution. **Review envi
 2. Establish a reproducible supported Gradle/AGP/SDK combination and verify the new build-only CI for debug/release builds, lint and tests on pull requests.
 3. Add tests for config migration, app scanning concurrency, browser records, shortcut operations and security entry points; follow with device/instrumentation coverage.
 4. Audit WebView bridge and access policy, backup rules, permissions, store policy and Android background restrictions.
-5. Decide whether to implement genuine Home registration, TV mode and boot/startup features, or remove/label unsupported controls. Confirm license with owner.
+5. Verify Home registration on actual devices, and decide whether to implement separate TV mode and boot/startup features or remove/label unsupported controls. Confirm license with owner.
 
 ## 10. Troubleshooting
 

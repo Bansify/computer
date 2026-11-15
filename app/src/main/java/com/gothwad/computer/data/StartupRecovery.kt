@@ -15,13 +15,15 @@ object StartupRecovery {
     private const val KEY_FAILURES = "startup_crashes"
     @Volatile private var starting = true
 
-    fun shouldUseSafeMode(context: Context): Boolean =
+    fun shouldUseSafeMode(context: Context): Boolean = runCatching {
         StartupRecoveryPolicy.needsRecovery(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_FAILURES, 0))
+    }.getOrDefault(true)
 
     fun recordUncaughtStartupCrash(context: Context) {
         if (!starting) return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val failures = StartupRecoveryPolicy.nextFailures(prefs.getInt(KEY_FAILURES, 0))
+        val previous = runCatching { prefs.getInt(KEY_FAILURES, 0) }.getOrDefault(StartupRecoveryPolicy.THRESHOLD - 1)
+        val failures = StartupRecoveryPolicy.nextFailures(previous)
         // Synchronous because the process is about to terminate; no app data is erased.
         prefs.edit().putInt(KEY_FAILURES, failures).commit()
     }

@@ -12,9 +12,18 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.gothwad.computer.data.AppRepository
+import com.gothwad.computer.data.BitmapSampling
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import java.io.File
 
 /** Emulator smoke coverage; does not replace a real TV remote or OEM Home test. */
 @RunWith(AndroidJUnit4::class)
@@ -28,6 +37,26 @@ class HomeSmokeTest {
             }
         assertTrue(hasOwnActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY))
         assertTrue(hasOwnActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0))
+    }
+
+    @Test fun concurrentAppScansProduceConsistentSnapshots() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val snapshots = withTimeout(60_000) {
+            coroutineScope { List(4) { async { AppRepository.scan(context) } }.awaitAll() }
+        }
+        val packages = snapshots.first().map { it.pkg }.toSet()
+        assertTrue(snapshots.all { it.map { app -> app.pkg }.toSet() == packages })
+    }
+
+    @Test fun corruptWallpaperDecodeReturnsNull() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val file = File.createTempFile("corrupt_wallpaper", ".jpg", context.cacheDir)
+        try {
+            file.writeText("not an image")
+            assertNull(BitmapSampling.decodeFile(file.absolutePath, 1920, 1080))
+        } finally {
+            file.delete()
+        }
     }
 
     @Test fun repeatedStartupFailuresOfferRecoveryWithoutExitingOnBack() {
