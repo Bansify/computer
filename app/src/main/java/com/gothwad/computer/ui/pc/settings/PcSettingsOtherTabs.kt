@@ -25,6 +25,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.gothwad.computer.Actions
 import com.gothwad.computer.R
 import com.gothwad.computer.apps.webapp.WebAppManager
+import com.gothwad.computer.apps.webapp.WebUrlPolicy
 import com.gothwad.computer.data.AppEntry
 import com.gothwad.computer.data.AppRepository
 import com.gothwad.computer.data.ConfigStore
@@ -1025,7 +1026,7 @@ class PcSettingsOtherTabs(
 
     private fun showAppActionDialog(app: AppEntry) {
         val actions = listOf(
-            "Launch in Floating Window",
+            "Launch app",
             "Add Desktop Shortcut",
             "Pin to Taskbar",
             "App Info (Permissions & Storage)",
@@ -1037,8 +1038,9 @@ class PcSettingsOtherTabs(
             .setItems(actions.toTypedArray()) { _, which ->
                 when (which) {
                     0 -> {
-                        Actions.launchApp(context, app.pkg)
-                        Toast.makeText(context, "Launching ${app.label}...", Toast.LENGTH_SHORT).show()
+                        val activity = context as? com.gothwad.computer.MainActivity
+                        if (activity != null) activity.requestAppLaunch(app)
+                        else Toast.makeText(context, "Return to Home to launch this app", Toast.LENGTH_SHORT).show()
                     }
                     1 -> {
                         scope.launch {
@@ -1165,7 +1167,7 @@ class PcSettingsOtherTabs(
             .setPositiveButton("Create Shortcut") { _, _ ->
                 val name = etName.text.toString().trim()
                 val url = etUrl.text.toString().trim()
-                if (url.isNotEmpty()) {
+                if (url.isNotEmpty() && WebUrlPolicy.isWebUrl(WebAppManager.formatUrl(url))) {
                     scope.launch {
                         WebAppManager.installWebApp(
                             context = context,

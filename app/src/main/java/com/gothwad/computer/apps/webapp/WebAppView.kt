@@ -61,7 +61,7 @@ class WebAppView(
     private val context: Context,
     private val initialUrl: String = "https://www.google.com",
     private val isStandaloneWebApp: Boolean = false,
-    private val onPinShortcut: ((title: String, url: String, icon: Bitmap?) -> Unit)? = null
+    private val onPinShortcut: (() -> Unit)? = null
 ) {
     val binding: ViewWebAppBinding = ViewWebAppBinding.inflate(
         LayoutInflater.from(context)
@@ -74,9 +74,6 @@ class WebAppView(
 
     private val desktopUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
     private var defaultMobileUserAgent: String = ""
-
-    // File Chooser for <input type="file">
-    var fileChooserCallback: ValueCallback<Array<Uri>>? = null
 
     data class ChromeTab(
         val id: String,
@@ -575,11 +572,9 @@ class WebAppView(
             val url = getCurrentUrl()
             val title = getTitle()
             if (dataStore.isBookmarked(url)) {
-                dataStore.removeBookmark(url)
-                Toast.makeText(context, "Removed bookmark", Toast.LENGTH_SHORT).show()
+                if (dataStore.removeBookmark(url)) Toast.makeText(context, "Removed bookmark", Toast.LENGTH_SHORT).show()
             } else {
-                dataStore.addBookmark(title, url)
-                Toast.makeText(context, "Saved to bookmarks ★", Toast.LENGTH_SHORT).show()
+                if (dataStore.addBookmark(title, url)) Toast.makeText(context, "Saved to bookmarks ★", Toast.LENGTH_SHORT).show()
             }
             updateBookmarkIcon(url)
         }
@@ -792,9 +787,7 @@ class WebAppView(
             prefillUrl = if (url != "chrome://newtab") url else "",
             prefillTitle = if (title != "New Tab" && title != "Web Browser") title else "",
             prefillIcon = icon,
-            onInstalled = { pkg ->
-                onPinShortcut?.invoke(title, url, icon)
-            }
+            onInstalled = { onPinShortcut?.invoke() }
         )
         dialog.show(act.supportFragmentManager, "install_web_app")
     }
@@ -812,8 +805,9 @@ class WebAppView(
         WebStorage.getInstance().deleteAllData()
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
-        dataStore.clearType("HISTORY")
-        Toast.makeText(context, "Cleared cookies, cache, and history", Toast.LENGTH_SHORT).show()
+        if (dataStore.clearType("HISTORY")) {
+            Toast.makeText(context, "History cleared; cookie removal requested", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun navigateFromInput() {
@@ -837,6 +831,10 @@ class WebAppView(
 
     private fun loadUrlInActiveTab(url: String) {
         val tab = getActiveTab() ?: return
+        if (url != "chrome://newtab" && !WebUrlPolicy.isWebUrl(url)) {
+            Toast.makeText(context, "Only valid HTTP or HTTPS addresses can be opened", Toast.LENGTH_SHORT).show()
+            return
+        }
         tab.url = url
         if (url == "chrome://newtab") {
             showNewTabPage(true)

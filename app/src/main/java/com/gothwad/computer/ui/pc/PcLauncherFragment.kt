@@ -40,6 +40,8 @@ import com.gothwad.computer.data.AppEntry
 import com.gothwad.computer.data.AppRepository
 import com.gothwad.computer.data.ConfigStore
 import com.gothwad.computer.data.LauncherConfig
+import com.gothwad.computer.data.LockCredential
+import com.gothwad.computer.data.LaunchAuthorization
 import com.gothwad.computer.data.networkStatusFlow
 import com.gothwad.computer.databinding.FragmentPcLauncherBinding
 import com.gothwad.computer.databinding.LayoutPcAppContextMenuBinding
@@ -239,13 +241,13 @@ class PcLauncherFragment : Fragment() {
         // File Manager Direct Taskbar Shortcut
         binding.btnTaskbarFiles.setOnClickListener {
             closeAllFlyouts()
-            openFileManagerWindow()
+            launchKnownApp("com.gothwad.computer.files")
         }
 
         // Web Browser Direct Taskbar Shortcut
         binding.btnTaskbarBrowser.setOnClickListener {
             closeAllFlyouts()
-            openWebAppWindow()
+            launchKnownApp("com.gothwad.computer.webapp")
         }
 
         // Notifications Button
@@ -958,13 +960,13 @@ class PcLauncherFragment : Fragment() {
         // Open File Manager Window
         menuBinding.itemOpenFileManager.setOnClickListener {
             popup.dismiss()
-            openFileManagerWindow()
+            launchKnownApp("com.gothwad.computer.files")
         }
 
         // Open Web App Browser Window
         menuBinding.itemOpenWebApp.setOnClickListener {
             popup.dismiss()
-            openWebAppWindow()
+            launchKnownApp("com.gothwad.computer.webapp")
         }
 
         // Install Web App to Desktop
@@ -1292,46 +1294,43 @@ class PcLauncherFragment : Fragment() {
         )
     }
 
-    private fun handleAppLaunch(app: AppEntry, skipLock: Boolean = false) {
-        if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) {
-            return
-        }
+    private fun launchKnownApp(pkg: String) {
+        val app = allApps.firstOrNull { it.pkg == pkg }
+        if (app != null) handleAppLaunch(app)
+        else Toast.makeText(requireContext(), "App list is still loading", Toast.LENGTH_SHORT).show()
+    }
 
-        // Intercept dedicated built-in apps for floating window display
-        if (app.pkg == "com.gothwad.computer.files") {
-            openFileManagerWindow()
-            return
+    private fun handleAppLaunch(app: AppEntry, authorized: LockCredential? = null) {
+        if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) return
+        // Check before built-in or web shortcuts as well as installed packages.
+        when (LaunchAuthorization.decide(currentConfig, app.pkg, authorized)) {
+            LaunchAuthorization.Decision.INVALID_CREDENTIAL -> {
+                Toast.makeText(requireContext(), "App lock configuration is incomplete; open lock settings", Toast.LENGTH_LONG).show()
+                return
+            }
+            LaunchAuthorization.Decision.CHALLENGE -> {
+                val credential = currentConfig.appLock
+                PinEntryDialogFragment.newInstance(
+                    title = "App Locked",
+                    subtitle = "Enter PIN/Password to launch ${app.label}",
+                    credential = credential,
+                    isCancelable = true,
+                    onSuccess = { handleAppLaunch(app, authorized = credential) }
+                ).show(parentFragmentManager, PinEntryDialogFragment.TAG)
+                return
+            }
+            LaunchAuthorization.Decision.ALLOW -> Unit
         }
-        if (app.pkg == "com.gothwad.computer.store") {
-            openStoreWindow()
-            return
-        }
-        if (app.pkg == "com.gothwad.computer.webapp" || app.pkg.startsWith("pwa://")) {
-            val isPwa = app.pkg.startsWith("pwa://")
-            val url = if (isPwa) app.pkg.removePrefix("pwa://") else "https://www.google.com"
-            val iconDrawable = if (app.icon != null) BitmapDrawable(resources, app.icon) else null
-            openWebAppWindow(
-                initialUrl = url,
-                title = app.label,
-                customIconDrawable = iconDrawable,
-                isStandalone = isPwa
-            )
-            return
-        }
-
-        // UX in-launcher app lock check
-        if (!skipLock && currentConfig.appLock.enabled && currentConfig.appLock.value.isNotEmpty() && app.pkg in currentConfig.lockedApps) {
-            PinEntryDialogFragment.newInstance(
-                title = "App Locked",
-                subtitle = "Enter PIN/Password to launch ${app.label}",
-                credential = currentConfig.appLock,
-                isCancelable = true,
-                onSuccess = {
-                    handleAppLaunch(app, skipLock = true)
-                }
-            ).show(parentFragmentManager, PinEntryDialogFragment.TAG)
-        } else {
-            Actions.launchApp(requireContext(), app.pkg)
+        when {
+            app.pkg == "com.gothwad.computer.files" -> openFileManagerWindow()
+            app.pkg == "com.gothwad.computer.store" -> openStoreWindow()
+            app.pkg == "com.gothwad.computer.webapp" || app.pkg.startsWith("pwa://") -> {
+                val isPwa = app.pkg.startsWith("pwa://")
+                val url = if (isPwa) app.pkg.removePrefix("pwa://") else "https://www.google.com"
+                val iconDrawable = app.icon?.let { BitmapDrawable(resources, it) }
+                openWebAppWindow(initialUrl = url, title = app.label, customIconDrawable = iconDrawable, isStandalone = isPwa)
+            }
+            else -> Actions.launchApp(requireContext(), app.pkg)
         }
     }
 
@@ -1359,13 +1358,7 @@ class PcLauncherFragment : Fragment() {
                     loadApps()
                 }
             },
-            onOpenWebApp = { url, title ->
-                openWebAppWindow(
-                    initialUrl = url,
-                    title = title,
-                    isStandalone = true
-                )
-            }
+            onOpenWebApp = { url, _ -> launchKnownApp("pwa://$url") }
         )
 
         val windowIcon = ContextCompat.getDrawable(requireContext(), R.drawable.ic_win_store)
@@ -1396,16 +1389,8 @@ class PcLauncherFragment : Fragment() {
             context = requireContext(),
             initialUrl = initialUrl,
             isStandaloneWebApp = isStandalone,
-            onPinShortcut = { siteTitle, siteUrl, iconBmp ->
-                viewLifecycleOwner.lifecycleScope.launch {
-                    WebAppManager.installWebApp(
-                        context = requireContext(),
-                        url = siteUrl,
-                        title = siteTitle,
-                        icon = iconBmp
-                    )
-                    loadApps()
-                }
+            onPinShortcut = {
+                viewLifecycleOwner.lifecycleScope.launch { loadApps() }
             }
         )
 

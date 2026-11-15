@@ -49,6 +49,7 @@ object WebAppManager {
         iconUrl: String? = null
     ): String = withContext(Dispatchers.IO) {
         val formattedUrl = formatUrl(url)
+        require(WebUrlPolicy.isWebUrl(formattedUrl)) { "Invalid web address" }
         val finalTitle = title.trim().ifEmpty {
             URL(formattedUrl).host.removePrefix("www.").replaceFirstChar { it.uppercase() }
         }

@@ -3,6 +3,7 @@ package com.gothwad.computer.apps.store
 import android.annotation.SuppressLint
 import android.content.Context
 import android.view.View
+import android.graphics.Bitmap
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -55,6 +56,9 @@ class GothwadStoreView(
 
         webChromeClient = WebChromeClient()
         webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                if (url != STORE_ORIGIN + "index.html") view?.removeJavascriptInterface("AndroidStoreBridge")
+            }
             // The bridge is only attached to this packaged page. Never let a web page,
             // redirect, frame, or arbitrary asset acquire it.
             override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean = true

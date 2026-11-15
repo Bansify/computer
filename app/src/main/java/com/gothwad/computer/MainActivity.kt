@@ -27,6 +27,8 @@ import com.gothwad.computer.data.AppRepository
 import com.gothwad.computer.data.BluetoothDeviceStatus
 import com.gothwad.computer.data.ConfigStore
 import com.gothwad.computer.data.LauncherConfig
+import com.gothwad.computer.data.LockCredential
+import com.gothwad.computer.data.LaunchAuthorization
 import com.gothwad.computer.data.MODE_PC
 import com.gothwad.computer.data.NetStatus
 import com.gothwad.computer.data.HomeSettings
@@ -409,20 +411,24 @@ class MainActivity : AppCompatActivity() {
         ).show(supportFragmentManager, PcSettingsDialogFragment.TAG)
     }
 
-    private fun handleAppLaunch(app: AppEntry, skipLock: Boolean = false) {
+    fun requestAppLaunch(app: AppEntry) = handleAppLaunch(app)
+
+    private fun handleAppLaunch(app: AppEntry, authorized: LockCredential? = null) {
         if (!configReady || !GothwadApplication.hasUnlockedDeviceThisProcess) return
-        if (!skipLock && currentConfig.appLock.enabled && currentConfig.appLock.value.isNotEmpty() && app.pkg in currentConfig.lockedApps) {
-            PinEntryDialogFragment.newInstance(
-                title = "App Locked",
-                subtitle = "Enter PIN/Password to launch ${app.label}",
-                credential = currentConfig.appLock,
-                isCancelable = true,
-                onSuccess = {
-                    handleAppLaunch(app, skipLock = true)
-                }
-            ).show(supportFragmentManager, PinEntryDialogFragment.TAG)
-        } else {
-            Actions.launchApp(this, app.pkg)
+        when (LaunchAuthorization.decide(currentConfig, app.pkg, authorized)) {
+            LaunchAuthorization.Decision.INVALID_CREDENTIAL ->
+                Toast.makeText(this, "App lock configuration is incomplete; open lock settings", Toast.LENGTH_LONG).show()
+            LaunchAuthorization.Decision.CHALLENGE -> {
+                val credential = currentConfig.appLock
+                PinEntryDialogFragment.newInstance(
+                    title = "App Locked",
+                    subtitle = "Enter PIN/Password to launch ${app.label}",
+                    credential = credential,
+                    isCancelable = true,
+                    onSuccess = { handleAppLaunch(app, authorized = credential) }
+                ).show(supportFragmentManager, PinEntryDialogFragment.TAG)
+            }
+            LaunchAuthorization.Decision.ALLOW -> Actions.launchApp(this, app.pkg)
         }
     }
 

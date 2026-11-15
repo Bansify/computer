@@ -70,8 +70,8 @@ class BrowserDataStore(private val context: Context, dataFile: File = File(conte
         try { read() } catch (_: Exception) { reportError(); emptyList() }
     }
 
-    private fun update(transform: (List<BrowserEntry>) -> List<BrowserEntry>) = synchronized(lock) {
-        try { write(transform(read())) } catch (_: Exception) { reportError() }
+    private fun update(transform: (List<BrowserEntry>) -> List<BrowserEntry>): Boolean = synchronized(lock) {
+        try { write(transform(read())); true } catch (_: Exception) { reportError(); false }
     }
 
     fun addBookmark(title: String, url: String) = update { current ->

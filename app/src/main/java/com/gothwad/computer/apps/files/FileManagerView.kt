@@ -499,20 +499,8 @@ class FileManagerView(
         binding.tvDragDropHint.visibility = View.GONE
         if (!source.exists() || !targetDir.exists() || !targetDir.isDirectory) return
 
-        val safe = runCatching {
-            val sourcePath = source.canonicalFile
-            val target = targetDir.canonicalFile
-            if (sourcePath.parentFile == target ||
-                (sourcePath.isDirectory && (target == sourcePath || target.path.startsWith(sourcePath.path + File.separator)))) {
-                return@runCatching false
-            }
-            val dest = File(target, sourcePath.name)
-            // Never overwrite an existing destination. Do not copy/delete across filesystems:
-            // partial copies or failed deletions must not destroy the original.
-            if (dest.exists()) return@runCatching false
-            sourcePath.renameTo(dest)
-        }.getOrDefault(false)
-        val success = safe
+        // Cross-filesystem copy/delete is intentionally unsupported to preserve the source on failure.
+        val success = SafeFileMove.move(source, targetDir)
 
         if (success) {
             Toast.makeText(context, "Moved '${source.name}' to '${targetDir.name}'", Toast.LENGTH_SHORT).show()
