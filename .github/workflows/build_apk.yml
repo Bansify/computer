@@ -1,8 +1,7 @@
 name: Build Signed Release APK & Play Store AAB
 
+# Publishing is deliberate: merging to the default branch must not publish a release.
 on:
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
     inputs:
       version_name:
