@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/card_row_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -20,7 +21,7 @@
         android:layout_width="24dp"
         android:layout_height="24dp"
         android:contentDescription="@null"
-        android:tint="#0078D4" />
+        app:tint="#0078D4" />
 
     <LinearLayout
         android:layout_width="0dp"
@@ -68,5 +69,5 @@
         android:layout_height="20dp"
         android:contentDescription="@null"
         android:src="@drawable/ic_chevron_right"
-        android:tint="#666B79" />
+        app:tint="#666B79" />
 </LinearLayout>

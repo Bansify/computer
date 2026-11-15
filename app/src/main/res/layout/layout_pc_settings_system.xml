@@ -39,7 +39,7 @@
                 android:layout_height="48dp"
                 android:contentDescription="@null"
                 android:src="@drawable/ic_win_system"
-                android:tint="#0078D4" />
+                app:tint="#0078D4" />
 
             <LinearLayout
                 android:layout_width="0dp"
