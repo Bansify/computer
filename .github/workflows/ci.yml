@@ -46,6 +46,14 @@ jobs:
               errors = sum(1 for item in issues if item.get('severity') in ('Error', 'Fatal'))
               warnings = sum(1 for item in issues if item.get('severity') == 'Warning')
               print(f'::notice::Lint report: {errors} errors, {warnings} warnings; build does not yet enforce a zero-error gate.')
+              for item in issues:
+                  if item.get('severity') not in ('Error', 'Fatal'):
+                      continue
+                  location = item.find('location')
+                  file = location.get('file', '') if location is not None else ''
+                  line = location.get('line', '1') if location is not None else '1'
+                  message = (item.get('id', '') + ': ' + item.get('message', '')).replace('%', '%25').replace('\n', '%0A').replace('\r', '%0D')
+                  print(f'::warning file={file},line={line}::{message}')
           else:
               print('::warning::Lint report unavailable; inspect the build job and uploaded reports.')
           PYCODE
