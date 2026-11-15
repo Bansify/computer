@@ -13,8 +13,20 @@ if [[ "$metadata" != *"name='com.gothwad.computer'"* || "$metadata" != *"version
   echo "Unexpected package or version code in v1.0.20; investigate upgrade history." >&2
   exit 1
 fi
-baseline_certs=$("$apksigner" verify --print-certs "$baseline" | grep -E '^Signer #[0-9]+ certificate SHA-256 digest:' | sort)
-test -n "$baseline_certs" || { echo "Could not read baseline signing certificate" >&2; exit 1; }
+certificates() {
+  local output certs
+  if ! output=$("$apksigner" verify --print-certs "$1" 2>&1); then
+    echo "APK signature verification failed: $output" >&2
+    return 1
+  fi
+  certs=$(printf '%s\n' "$output" | grep -E '^Signer #[0-9]+ certificate SHA-256 digest:' | sort || true)
+  if [[ -z "$certs" ]]; then
+    echo "No signing certificate found; verifier output: $output" >&2
+    return 1
+  fi
+  printf '%s\n' "$certs"
+}
+baseline_certs=$(certificates "$baseline")
 if [[ -n "$candidate" ]]; then
   test -s "$candidate"
   metadata=$("$aapt" dump badging "$candidate" | sed -n '1p')
@@ -23,7 +35,7 @@ if [[ -n "$candidate" ]]; then
     echo "Candidate package or version code is incorrect" >&2
     exit 1
   fi
-  candidate_certs=$("$apksigner" verify --print-certs "$candidate" | grep -E '^Signer #[0-9]+ certificate SHA-256 digest:' | sort)
+  candidate_certs=$(certificates "$candidate")
   if [[ -z "$candidate_certs" || "$candidate_certs" != "$baseline_certs" ]]; then
     echo "Release APK signing certificate differs from v1.0.20; refusing to publish." >&2
     exit 1
