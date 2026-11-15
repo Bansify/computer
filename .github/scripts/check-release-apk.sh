@@ -38,6 +38,7 @@ if [[ -n "$candidate" ]]; then
   candidate_certs=$(certificates "$candidate")
   if [[ -z "$candidate_certs" || "$candidate_certs" != "$baseline_certs" ]]; then
     echo "Release APK signing certificate differs from v1.0.20; refusing to publish." >&2
+    printf 'v1.0.20 certificate SHA-256: %s\nCandidate certificate SHA-256: %s\n' "$baseline_certs" "$candidate_certs" >&2
     exit 1
   fi
 fi
