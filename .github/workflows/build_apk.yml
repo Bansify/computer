@@ -5,6 +5,11 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      dry_run:
+        description: 'Build and verify without publishing (required outside main)'
+        type: boolean
+        required: false
+        default: false
       version_name:
         description: 'Version Name (e.g. 1.0.6 - leave empty for auto 1.0.X)'
         required: false
@@ -19,7 +24,7 @@ permissions:
 
 jobs:
   validate:
-    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || inputs.dry_run
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
@@ -186,7 +191,18 @@ jobs:
         run: |
           mkdir -p release-baseline
           gh release download v1.0.20 --pattern 'GothwadComputer-v1.0.20-Release.apk' --dir release-baseline
-          bash .github/scripts/check-release-apk.sh release-baseline/GothwadComputer-v1.0.20-Release.apk "output_release/GothwadComputer-v${V_NAME}-Release.apk" "$V_CODE"
+          set +e
+          bash .github/scripts/check-release-apk.sh release-baseline/GothwadComputer-v1.0.20-Release.apk "output_release/GothwadComputer-v${V_NAME}-Release.apk" "$V_CODE" > verify.log 2>&1
+          result=$?
+          cat verify.log
+          if [ "$result" -ne 0 ]; then
+            python3 - <<'PYCODE'
+          from pathlib import Path
+          text = Path('verify.log').read_text(errors='replace')[:4000]
+          print('::error::' + text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+          PYCODE
+          fi
+          exit "$result"
 
       - name: Upload Signed Release APK, Debug APK & AAB Artifacts
         uses: actions/upload-artifact@v7
@@ -195,6 +211,7 @@ jobs:
           path: output_release/
 
       - name: Create Automatic GitHub Release
+        if: github.event_name != 'workflow_dispatch' || !inputs.dry_run
         uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
