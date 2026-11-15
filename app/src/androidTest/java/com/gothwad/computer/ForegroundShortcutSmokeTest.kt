@@ -21,7 +21,8 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ForegroundShortcutSmokeTest {
-    @Test fun configuredFunctionKeyOpensStart() = runBlocking {
+    @Test fun configuredFunctionKeyOpensStart() {
+        runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = ConfigStore(context)
         val original = store.flow.first().foregroundShortcuts
@@ -60,5 +61,6 @@ class ForegroundShortcutSmokeTest {
                 }
             }
         } finally { store.update { it.copy(foregroundShortcuts = original) } }
+        }
     }
 }
