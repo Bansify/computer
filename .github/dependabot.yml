@@ -1,0 +1,38 @@
+version: 2
+updates:
+  # The root Gradle build includes :app through settings.gradle.kts.
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 6
+    groups:
+      androidx-minor-patch:
+        patterns:
+          - "androidx.*"
+        update-types:
+          - minor
+          - patch
+      kotlin-minor-patch:
+        patterns:
+          - "org.jetbrains.kotlin*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

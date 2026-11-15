@@ -52,6 +52,7 @@ Release builds are unsigned by default. For local testing only, `-PlocalSign` us
 - [Full project analysis and developer guide](docs/PROJECT_ANALYSIS.md): architecture, flows, storage, permissions, security findings, build/CI and test plan.
 - [Developer rules](AGENTS.md): native-Views-only architecture.
 - [Five-phase Home launcher master plan](task.md): consolidated roadmap, acceptance gates and release-readiness criteria.
+- [GitHub automation](docs/GITHUB_AUTOMATION.md): dependency updates, AI review, scanning, CI and owner setup.
 - [Release blockers and limitations](docs/REMAINING_RELEASE_WORK.md): unfinished gates and deliberately disabled unsafe features.
 - [Historical lock design notes](docs/task-lock-system.md): superseded by the master plan; do not use as an implementation specification.
 
