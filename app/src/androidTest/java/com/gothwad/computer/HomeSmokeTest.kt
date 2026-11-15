@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -105,6 +106,11 @@ class HomeSmokeTest {
                 assertTrue(start.requestFocus())
                 start.performClick()
                 assertEquals(View.VISIBLE, menu.visibility)
+                val focused = requireNotNull(menu.findFocus()) { "Start menu should receive remote focus" }
+                val candidate = (menu as ViewGroup).focusSearch(focused, View.FOCUS_UP)
+                var parent = candidate?.parent
+                while (parent != null && parent !== menu) parent = parent.parent
+                assertTrue("Start menu focus should not escape behind the flyout", candidate === menu || parent === menu)
                 activity.onBackPressedDispatcher.onBackPressed()
                 assertEquals(View.GONE, menu.visibility)
                 activity.onBackPressedDispatcher.onBackPressed()

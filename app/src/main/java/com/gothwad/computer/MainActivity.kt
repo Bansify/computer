@@ -72,9 +72,7 @@ class MainActivity : AppCompatActivity() {
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            val pkg = intent.data?.schemeSpecificPart
-            val launchable = pkg != null && packageManager.getLaunchIntentForPackage(pkg) != null
-            if (normalDesktopStarted && (intent.action == Intent.ACTION_PACKAGE_REMOVED || launchable)) {
+            if (normalDesktopStarted) {
                 rescanTick++
                 refreshAppsList()
             }

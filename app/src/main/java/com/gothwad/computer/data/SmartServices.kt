@@ -78,8 +78,13 @@ fun bluetoothStatusFlow(context: Context): Flow<BluetoothDeviceStatus> = callbac
                 BluetoothDevice.ACTION_ACL_CONNECTED -> {
                     @Suppress("DEPRECATION")
                     val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-                    val name = runCatching { device?.name }.getOrNull() ?: "Bluetooth device"
-                    status = BluetoothDeviceStatus(connected = true, name = name, statusKnown = true)
+                    val name = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                        ContextCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        try { device?.name } catch (_: SecurityException) { null }
+                    } else null
+                    val displayName = name ?: "Bluetooth device"
+                    status = BluetoothDeviceStatus(connected = true, name = displayName, statusKnown = true)
                 }
                 BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
                     // There may be other devices; do not claim all devices are disconnected.

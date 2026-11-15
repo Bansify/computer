@@ -45,7 +45,7 @@
         android:clipToPadding="false" />
 
     <!-- Start Menu Container (Flyout above taskbar) -->
-    <FrameLayout
+    <com.gothwad.computer.ui.view.FocusTrapFrameLayout
         android:id="@+id/container_start_menu"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -57,10 +57,10 @@
         <include
             android:id="@+id/view_start_menu"
             layout="@layout/layout_pc_start_menu" />
-    </FrameLayout>
+    </com.gothwad.computer.ui.view.FocusTrapFrameLayout>
 
     <!-- Quick Settings Flyout Container (Flyout above system tray) -->
-    <FrameLayout
+    <com.gothwad.computer.ui.view.FocusTrapFrameLayout
         android:id="@+id/container_quick_settings"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -72,7 +72,7 @@
         <include
             android:id="@+id/view_quick_settings"
             layout="@layout/layout_pc_quick_settings" />
-    </FrameLayout>
+    </com.gothwad.computer.ui.view.FocusTrapFrameLayout>
 
     <!-- Bottom Taskbar (Solid Square-Curve Aesthetic) -->
     <RelativeLayout

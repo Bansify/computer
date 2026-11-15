@@ -170,9 +170,11 @@ class PcDesktopIconAdapter(
             }
 
             // Right-Click (Mouse Secondary Button) via standard Android OnContextClickListener
-            binding.root.setOnContextClickListener { v ->
-                onAppContextMenu(app, v, lastTouchX, lastTouchY)
-                true
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                binding.root.setOnContextClickListener { v ->
+                    onAppContextMenu(app, v, lastTouchX, lastTouchY)
+                    true
+                }
             }
 
             // Touch Long Click / Hold triggers Drag OR Context Menu
@@ -180,8 +182,9 @@ class PcDesktopIconAdapter(
                 // D-pad long-press has no pointer coordinates: anchor to the focused item.
                 val location = IntArray(2)
                 v.getLocationOnScreen(location)
-                val x = if (lastTouchX > 0f) lastTouchX else location[0] + v.width / 2f
-                val y = if (lastTouchY > 0f) lastTouchY else location[1] + v.height / 2f
+                val fromPointer = v.isInTouchMode && lastTouchX > 0f && lastTouchY > 0f
+                val x = if (fromPointer) lastTouchX else location[0] + v.width / 2f
+                val y = if (fromPointer) lastTouchY else location[1] + v.height / 2f
                 onAppContextMenu(app, v, x, y)
                 true
             }

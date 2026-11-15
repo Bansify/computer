@@ -674,6 +674,7 @@ class PcLauncherFragment : Fragment() {
         binding.recyclerDesktopGrid.setOnTouchListener(desktopTouchListener)
         binding.pcLauncherRoot.setOnTouchListener(desktopTouchListener)
 
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
         val desktopContextClickListener = View.OnContextClickListener {
             if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) {
                 return@OnContextClickListener true
@@ -685,6 +686,7 @@ class PcLauncherFragment : Fragment() {
 
         binding.recyclerDesktopGrid.setOnContextClickListener(desktopContextClickListener)
         binding.pcLauncherRoot.setOnContextClickListener(desktopContextClickListener)
+        }
 
         val desktopLongClickListener = View.OnLongClickListener {
             if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) {

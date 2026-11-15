@@ -343,7 +343,7 @@ class PcSettingsSystemPage(
                 Hardware: ${Build.HARDWARE} (${Build.BOARD})
                 Processor: ${Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"}
                 Android Base: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})
-                Security Patch: ${Build.VERSION.SECURITY_PATCH ?: "Current"}
+                Security Patch: ${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Build.VERSION.SECURITY_PATCH else "Unavailable"}
             """.trimIndent()
 
             PcSettingCardHelper.showInfoDialog(

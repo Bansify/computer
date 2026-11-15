@@ -137,7 +137,7 @@ object BackgroundMediaTracker {
         silenceAudio(context)
         if (!packageName.isNullOrBlank()) {
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-            am?.killBackgroundProcesses(packageName)
+            runCatching { am?.killBackgroundProcesses(packageName) }
         }
     }
 

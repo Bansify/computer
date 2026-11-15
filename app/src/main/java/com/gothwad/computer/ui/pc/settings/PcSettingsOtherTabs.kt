@@ -226,18 +226,20 @@ class PcSettingsOtherTabs(
 
         // Active Connection Status
         val connMgr = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        val activeNet = connMgr?.activeNetwork
-        val caps = connMgr?.getNetworkCapabilities(activeNet)
-
-        val isWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-        val isCellular = caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
-        val isEthernet = caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
+        val caps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            runCatching { connMgr?.getNetworkCapabilities(connMgr.activeNetwork) }.getOrNull()
+        } else null
+        @Suppress("DEPRECATION")
+        val legacy = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) runCatching { connMgr?.activeNetworkInfo }.getOrNull() else null
+        val isWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true || (legacy?.isConnected == true && legacy.type == ConnectivityManager.TYPE_WIFI)
+        val isCellular = caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true || (legacy?.isConnected == true && legacy.type == ConnectivityManager.TYPE_MOBILE)
+        val isEthernet = caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true || (legacy?.isConnected == true && legacy.type == ConnectivityManager.TYPE_ETHERNET)
 
         val netStatus = when {
-            isWifi -> "Wi-Fi Connected • High Speed Internet"
-            isEthernet -> "Ethernet Cable Connected • Gigabit LAN"
-            isCellular -> "Mobile Data Connected • Cellular"
-            else -> "Disconnected • No active internet connection"
+            isWifi -> "Wi-Fi connected"
+            isEthernet -> "Ethernet connected"
+            isCellular -> "Mobile data connected"
+            else -> "Network status unavailable or disconnected"
         }
 
         PcSettingCardHelper.addCard(
@@ -246,7 +248,7 @@ class PcSettingsOtherTabs(
             iconRes = R.drawable.ic_win_network,
             title = "Network Status",
             subtitle = netStatus,
-            value = if (isWifi || isEthernet || isCellular) "Connected" else "Offline"
+            value = if (isWifi || isEthernet || isCellular) "Connected" else "Unknown"
         ) {
             openIntent(Settings.ACTION_WIFI_SETTINGS)
         }
@@ -952,7 +954,7 @@ class PcSettingsOtherTabs(
                 Device: ${Build.MANUFACTURER} ${Build.MODEL}
                 Processor: ${Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"}
                 Android Base: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})
-                Security Patch: ${Build.VERSION.SECURITY_PATCH ?: "2026-09-01"}
+                Security Patch: ${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Build.VERSION.SECURITY_PATCH else "Unavailable"}
             """.trimIndent()
             PcSettingCardHelper.showInfoDialog(context, "Windows Specifications", specs)
         }
