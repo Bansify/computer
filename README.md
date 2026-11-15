@@ -1,104 +1,57 @@
 # Gothwad Computer
 
-<p align="center">
-  <b>A high-performance, lightweight universal launcher tailored for Android TV and Desktop PC environments.</b>
-</p>
+Gothwad Computer is a Kotlin Android application that presents a desktop-style environment with an app grid, taskbar, floating built-in windows, file manager, browser and web-app shortcuts. It runs on Android devices (including devices without a touchscreen); it is not a Windows emulator and does not run Windows executables.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Platform-Android%20TV%20%7C%20PC-blue?style=flat-square" alt="Platform" />
-  <img src="https://img.shields.io/badge/Min%20SDK-21%20(Lollipop)-green?style=flat-square" alt="Min SDK" />
-  <img src="https://img.shields.io/badge/Target%20SDK-34%20(Android%2014)-orange?style=flat-square" alt="Target SDK" />
-  <img src="https://img.shields.io/badge/Language-Kotlin-purple?style=flat-square" alt="Kotlin" />
-  <img src="https://img.shields.io/badge/UI-Jetpack%20Compose%20%2F%20Material%203-blueviolet?style=flat-square" alt="Compose" />
-  <img src="https://img.shields.io/badge/License-Apache%202.0-lightgrey?style=flat-square" alt="License" />
-</p>
+> **Current state:** The active navigation graph starts the PC desktop. The manifest does not declare the Android `HOME` category, so this checkout does not register as the system's default Home app. Some settings and legacy TV-related configuration exist without a complete corresponding feature. See the [analysis](docs/PROJECT_ANALYSIS.md) before relying on security or privacy features.
 
----
+## What is in the app
 
-## 🌟 Overview
+- Desktop grid, start menu, taskbar, app search, notifications and settings.
+- Launch installed Android apps; hide, pin and arrange desktop entries.
+- In-app floating windows for File Manager, Web Browser and Gothwad Store.
+- Browser-based shortcuts (`pwa://` entries), not separately installed Android packages.
+- Optional launcher-level app/device locks, overlay taskbar, custom wallpaper and display settings. These are **not substitutes for Android system security**.
 
-**Gothwad Computer** is an ultra-fast, modern Android launcher designed from the ground up for both large TV screens (10-foot experience) and desktop/large tablet layouts. Built with **Jetpack Compose** and Android TV Material guidelines, it delivers zero-lag navigation, rich visual aesthetics, and extensive customization without bloat.
+The UI uses **Android Views, XML, ViewBinding, Fragments and RecyclerView**. Do not add Compose: see [AGENTS.md](AGENTS.md).
 
----
+## Project and tools
 
-## ✨ Features
+| Item | Current configuration |
+| --- | --- |
+| App ID / namespace | `com.gothwad.computer` |
+| Minimum / target / compile SDK | 21 / 34 / 34 |
+| Java / Kotlin | JDK 17 / Kotlin 2.0.20 |
+| Android Gradle Plugin / wrapper | 8.5.2 / Gradle 9.3.1 |
+| Default version | `1.0.6` (code `7`); overridable via Gradle properties |
+| Persistence | Preferences DataStore, JSON files, SharedPreferences and internal files |
 
-### 📺 Dual Mode Interface
-- **Android TV Mode**: Optimized for D-pad navigation, high-contrast focus indicators, leanback cards, and seamless remote control support.
-- **PC / Desktop Mode**: Features a desktop launcher with taskbar, system tray, quick toggles, and flexible icon arrangements suited for Android boxes, tablets, and mouse/keyboard navigation.
+The Gradle/AGP pair above is what is checked in, not a compatibility guarantee; see [build limitations](docs/PROJECT_ANALYSIS.md#build-test-aur-ci).
 
-### 🎬 Dynamic Aerial & Video Wallpapers
-- High-definition live video wallpapers and 4K aerial screensavers powered by **Media3 (ExoPlayer)**.
-- Integrated background media control with automatic pause/resume on app launch.
+## Build
 
-### 🎙️ Quick Search & Voice Integration
-- Instant app indexing and rapid fuzzy search.
-- Voice search modal with direct voice recognition support (`RecognizerIntent`).
+Prerequisites: JDK 17, Android SDK Platform 34 and matching SDK Build Tools, plus network access to the Gradle distribution and the Google/Maven/plugin repositories. Open the project in a compatible Android Studio or configure `ANDROID_HOME` / `local.properties` yourself.
 
-### 🌤️ Live Weather & Quick Dashboard
-- Real-time weather display with automatic location detection and condition icons.
-- Quick Dashboard for network status, storage insights, and fast access to system settings.
+```bash
+# The checked-in gradlew is not executable in this checkout; either invoke with sh
+sh ./gradlew assembleDebug
+# or: chmod +x gradlew && ./gradlew assembleDebug
+```
 
-### 🔒 Privacy & App Security
-- Built-in App Locker with PIN protection.
-- Hide sensitive apps from the main grid with quick unhide settings.
+Debug output: `app/build/outputs/apk/debug/`. Build release artifacts with:
 
-### ⚡ Performance & Optimization
-- **Baseline Profile** bundled for instant cold startup and jank-free scrolling.
-- Pure Kotlin DSL and lightweight DataStore persistence.
-- ProGuard and R8 rules pre-configured for minimal APK size.
+```bash
+sh ./gradlew assembleRelease bundleRelease
+```
 
----
+Release builds are unsigned by default. For local testing only, `-PlocalSign` uses a debug signing key; do **not** distribute that as a production release. `app/build.gradle.kts` also supports CI signing with `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`. The GitHub workflows instead build and sign in a separate step using repository secrets; see the [CI section](docs/PROJECT_ANALYSIS.md#build-test-aur-ci).
 
-## 🛠️ Tech Stack
+## Documentation
 
-- **UI Framework:** Jetpack Compose (1.7+), Android TV Material 3 (`androidx.tv:tv-material`), Material 3 (`androidx.compose.material3`)
-- **Language:** Kotlin 2.0+ with Coroutines & StateFlow
-- **Video & Media Engine:** AndroidX Media3 ExoPlayer (`media3-exoplayer`, `media3-datasource-okhttp`)
-- **Continuous Corners:** AndroidX Graphics Shapes (`androidx.graphics:graphics-shapes`) for smooth squircle cards
-- **Storage & State:** AndroidX Preferences DataStore, Kotlinx Serialization
-- **Performance:** AndroidX ProfileInstaller with AOT Baseline Profiles
+- [Full project analysis and developer guide](docs/PROJECT_ANALYSIS.md): architecture, flows, storage, permissions, security findings, build/CI and test plan.
+- [Developer rules](AGENTS.md): native-Views-only architecture.
+- [Five-phase Home launcher master plan](task.md): consolidated roadmap, acceptance gates and release-readiness criteria.
+- [Historical lock design notes](task-lock-system.md): superseded by the master plan; do not use as an implementation specification.
 
----
+## License
 
-## 🚀 Getting Started
-
-### Prerequisites
-- **Android Studio Ladybug (2024.2+)** or later
-- **JDK 17**
-- Android SDK with Platform 34 installed
-
-### Building Locally
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/gothwadtech/launcher.git
-   cd launcher
-   ```
-
-2. **Build Debug APK:**
-   ```bash
-   ./gradlew assembleDebug
-   ```
-   The generated APK will be available in:
-   `app/build/outputs/apk/debug/app-debug.apk`
-
-3. **Build Release APK & App Bundle (AAB):**
-   ```bash
-   ./gradlew assembleRelease bundleRelease
-   ```
-
----
-
-## 🤖 CI / CD (GitHub Actions)
-
-This repository includes automated workflows in `.github/workflows/`:
-- **`build_apk.yml`**: Automatically builds, packages, and signs Debug and Release APKs + Play Store AAB bundles on every push or manual dispatch.
-- **`release.yml`**: Automates GitHub Releases with version tagging and direct downloadable release APKs.
-
----
-
-## 📄 License
-
-This project is licensed under the Apache License 2.0. See the LICENSE file for details.
-
+The old README stated Apache 2.0, but this checkout has no `LICENSE` file. Confirm the intended license with the project owner before redistribution or adding a license file.
