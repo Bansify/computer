@@ -104,6 +104,8 @@ class MainActivity : AppCompatActivity() {
         recoveryMode = StartupRecovery.shouldUseSafeMode(this)
         // Avoid restoring the failing desktop fragment when entering recovery.
         super.onCreate(if (recoveryMode) null else savedInstanceState)
+        // Only the debug source set has a fault implementation; never crash recovery itself.
+        if (!recoveryMode) StartupTestHooks.beforeStartup(intent)
 
         if (com.gothwad.computer.data.DpiHelper.isCustomDpiEnabled(this)) {
             com.gothwad.computer.data.DpiHelper.applyToResources(
