@@ -440,9 +440,10 @@ class PcLauncherFragment : Fragment() {
         qsBinding.imgQsWifi.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_WIFI, 0xFF8AB4F8.toInt()))
 
         // Volume control
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-        val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val maxVol = runCatching { audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 1 }.getOrDefault(1).coerceAtLeast(1)
+        val currentVol = runCatching { audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0 }.getOrDefault(0)
+        qsBinding.seekbarVolume.isEnabled = audioManager != null
         val volPct = (currentVol * 100 / maxVol)
 
         qsBinding.seekbarVolume.max = maxVol
@@ -452,7 +453,7 @@ class PcLauncherFragment : Fragment() {
         qsBinding.seekbarVolume.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, progress, 0)
+                    runCatching { audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, progress, 0) }
                     val newPct = (progress * 100 / maxVol)
                     qsBinding.tvVolumePct.text = "$newPct%"
                 }
@@ -1479,6 +1480,11 @@ class PcLauncherFragment : Fragment() {
                         updateGridDimensions()
                         updateVisibleApps()
                         updatePinnedApps()
+                        val previousWebApps = (prevConfig.pcCustomLabels.keys + prevConfig.pcDesktopOrder).filter { it.startsWith("pwa://") }.toSet()
+                        val currentWebApps = (config.pcCustomLabels.keys + config.pcDesktopOrder).filter { it.startsWith("pwa://") }.toSet()
+                        if (previousWebApps != currentWebApps || prevConfig.pcCustomLabels != config.pcCustomLabels) {
+                            requestAppsRefresh()
+                        }
 
                         binding.btnSearch.visibility = if (config.pcShowTaskbarSearch) View.VISIBLE else View.GONE
 
