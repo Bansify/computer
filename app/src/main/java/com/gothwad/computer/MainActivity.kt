@@ -8,9 +8,12 @@ import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.Toast
+import android.widget.TextView
+import android.widget.FrameLayout
 import androidx.navigation.fragment.NavHostFragment
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -39,6 +42,8 @@ import com.gothwad.computer.ui.pc.settings.PcSettingsDialogFragment
 import com.gothwad.computer.ui.view.DeviceLockViewController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
@@ -162,11 +167,21 @@ class MainActivity : AppCompatActivity() {
     private var deviceLockController: DeviceLockViewController? = null
 
     private fun checkDeviceLockOnColdStart() {
+        binding.deviceLockContainer.removeAllViews()
+        binding.deviceLockContainer.addView(TextView(this).apply {
+            setText(R.string.safe_home_loading)
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 20f
+            gravity = Gravity.CENTER
+        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         binding.deviceLockContainer.visibility = View.VISIBLE
         binding.deviceLockContainer.bringToFront()
         lifecycleScope.launch {
             val config = try {
-                ConfigStore(this@MainActivity).flow.first()
+                withTimeout(15_000) { ConfigStore(this@MainActivity).flow.first() }
+            } catch (e: TimeoutCancellationException) {
+                showRecovery(configReadable = false)
+                return@launch
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

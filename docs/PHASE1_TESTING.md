@@ -15,7 +15,7 @@ Record commit/build, build variant/signature, date, device model/OEM, Android ve
 
 ## Failure and recovery
 
-- Verify settings read and an enabled launcher lock before desktop or recovery apps become accessible. Lock is a launcher UI feature, **not** a system-wide security boundary.
+- Verify a loading message appears while settings load and recovery is offered after a 15-second read timeout. Verify settings read and an enabled launcher lock before desktop or recovery apps become accessible. Lock is a launcher UI feature, **not** a system-wide security boundary.
 - In a disposable test installation, preserve a backup before introducing invalid config data using a controlled debug/test fixture. Confirm recovery reports unreadable settings, does not silently reset stored data, offers retry/system settings and does not list apps as unlocked. No in-app reset/export of corrupted config is currently implemented.
 - On a **disposable debug installation only**, the debug source set provides a startup-crash intent. Ensure the stock launcher is installed and selected first; force-stop before each attempt so `onCreate` is called. Example with an attached ADB device:
 

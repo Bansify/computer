@@ -213,6 +213,7 @@ object AppRepository {
             catch (e: Exception) { null }
             catch (e: OutOfMemoryError) { null }
             if (cached != null) return cached
+            runCatching { f.delete() }
         }
         val bmp = create() ?: return null
         runCatching {
