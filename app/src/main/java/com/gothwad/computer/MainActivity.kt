@@ -29,6 +29,7 @@ import com.gothwad.computer.data.ConfigStore
 import com.gothwad.computer.data.LauncherConfig
 import com.gothwad.computer.data.LockCredential
 import com.gothwad.computer.data.LaunchAuthorization
+import com.gothwad.computer.data.ForegroundShortcuts
 import com.gothwad.computer.data.MODE_PC
 import com.gothwad.computer.data.NetStatus
 import com.gothwad.computer.data.HomeSettings
@@ -62,6 +63,7 @@ class MainActivity : AppCompatActivity() {
     private var normalDesktopStarted = false
     private var recoveryMode = false
     private var safeBinding: ViewSafeHomeBinding? = null
+    private val handledShortcutKeys = mutableSetOf<Pair<Int, Int>>()
 
     /** Bumped whenever a package is installed/removed so the app grid rescans. */
     var rescanTick: Int = 0
@@ -453,17 +455,39 @@ class MainActivity : AppCompatActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (safeBinding == null && (!configReady || (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled))) {
-            if (deviceLockController?.handleKeyEvent(event.keyCode, event) == true) {
-                return true
-            }
-            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (deviceLockController?.handleKeyEvent(event.keyCode, event) == true) return true
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) return true
+        }
+        val key = event.deviceId to event.keyCode
+        if (event.action == KeyEvent.ACTION_UP && handledShortcutKeys.remove(key)) return true
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount > 0 && key in handledShortcutKeys) return true
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && configReady && normalDesktopStarted &&
+            safeBinding == null && GothwadApplication.hasUnlockedDeviceThisProcess &&
+            !event.isAltPressed && !event.isMetaPressed && !focusIsTextOrWeb()) {
+            val modifiers = (if (event.isCtrlPressed) ForegroundShortcuts.CTRL else 0) or
+                (if (event.isShiftPressed) ForegroundShortcuts.SHIFT else 0)
+            val shortcut = ForegroundShortcuts.find(currentConfig.foregroundShortcuts, event.keyCode, modifiers, event.device?.descriptor.orEmpty())
+            val host = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+            val desktop = host?.childFragmentManager?.primaryNavigationFragment as? com.gothwad.computer.ui.pc.PcLauncherFragment
+            if (shortcut != null && desktop?.handleForegroundShortcut(shortcut.action) == true) {
+                handledShortcutKeys.add(key)
                 return true
             }
         }
         return super.dispatchKeyEvent(event)
     }
 
+    private fun focusIsTextOrWeb(): Boolean {
+        var view: View? = currentFocus
+        while (view != null) {
+            if (view.onCheckIsTextEditor() || view is android.webkit.WebView) return true
+            view = view.parent as? View
+        }
+        return false
+    }
+
     override fun onDestroy() {
+        handledShortcutKeys.clear()
         runCatching { unregisterReceiver(packageReceiver) }
         super.onDestroy()
     }

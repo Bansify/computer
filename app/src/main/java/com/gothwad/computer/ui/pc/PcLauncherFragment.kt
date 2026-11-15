@@ -1431,6 +1431,18 @@ class PcLauncherFragment : Fragment() {
         } catch (_: Exception) {}
     }
 
+    /** Only while desktop is active; never intercept keys in a floating window or popup. */
+    fun handleForegroundShortcut(action: String): Boolean {
+        if (_binding == null || floatingWindowManager?.hasOpenWindows() == true || activePopupWindow?.isShowing == true) return false
+        when (action) {
+            com.gothwad.computer.data.ForegroundShortcuts.START -> toggleStartMenu()
+            com.gothwad.computer.data.ForegroundShortcuts.SEARCH -> { closeAllFlyouts(); openSearchDialog() }
+            com.gothwad.computer.data.ForegroundShortcuts.QUICK_SETTINGS -> toggleQuickSettings()
+            else -> return false
+        }
+        return true
+    }
+
     private fun openSearchDialog() {
         if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) {
             return

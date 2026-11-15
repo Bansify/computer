@@ -138,7 +138,9 @@ data class LauncherConfig(
     val pcTouchGamepad: Boolean = false,
     val pcDateFormat: String = "DD/MM/YYYY",
     val pcLanguage: String = "en",
-    // ----- Remote Button Mapping (Phase 5) -----
+    // Separate from legacy buttonMap: no silent migration or overwrite of old settings.
+    val foregroundShortcuts: List<ForegroundShortcut> = emptyList(),
+    // ----- Legacy remote button mapping -----
     val buttonMap: Map<Int, String> = emptyMap(),
     val buttonMapDefaultsApplied: Boolean = false,
 )

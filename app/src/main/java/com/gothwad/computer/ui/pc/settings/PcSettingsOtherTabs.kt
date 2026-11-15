@@ -167,7 +167,7 @@ class PcSettingsOtherTabs(
             val shortcuts = """
                 Use directional keys to move focus and select to activate.
                 Back closes an open menu or window when supported.
-                Configurable keyboard and remote shortcuts are not available yet.
+                Configure foreground shortcuts in System settings. Shortcuts work only on Home, for the selected input device.
                 Android or the device may reserve Home and other system keys.
             """.trimIndent()
             PcSettingCardHelper.showInfoDialog(context, "Keyboard Shortcuts Cheatsheet", shortcuts)

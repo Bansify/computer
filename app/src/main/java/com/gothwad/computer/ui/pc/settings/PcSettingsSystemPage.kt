@@ -28,7 +28,8 @@ class PcSettingsSystemPage(
     private val context: Context,
     private val scope: CoroutineScope,
     private var config: LauncherConfig,
-    private val onConfigChanged: ((LauncherConfig) -> Unit)? = null
+    private val onConfigChanged: ((LauncherConfig) -> Unit)? = null,
+    private val onOpenShortcuts: () -> Unit = {}
 ) {
     private var _binding: LayoutPcSettingsSystemBinding? = null
     val binding get() = _binding!!
@@ -285,27 +286,14 @@ class PcSettingsSystemPage(
             openSystemIntent(Settings.ACTION_CAST_SETTINGS)
         }
 
-        // 13. Keyboard Hotkeys Cheatsheet
+        // Foreground-only keyboard / remote bindings
         bindCard(
             root = b.cardSysRemote,
             iconRes = R.drawable.ic_win_system,
-            title = "Keyboard Shortcuts Cheatsheet",
-            subtitle = "Remote navigation and platform key limitations",
-            value = "View"
-        ) {
-            val shortcuts = """
-                Use directional keys to move focus and select to activate.
-                Back closes an open menu or window when supported.
-                Configurable keyboard and remote shortcuts are not available yet.
-                Android or the device may reserve Home and other system keys.
-            """.trimIndent()
-
-            PcSettingCardHelper.showInfoDialog(
-                context = context,
-                title = "Physical Keyboard Shortcuts",
-                message = shortcuts
-            )
-        }
+            title = "Keyboard & remote shortcuts",
+            subtitle = "Configure keys for Home only; system keys are not intercepted",
+            value = "Configure"
+        ) { onOpenShortcuts() }
 
         // 14. Double-Click to Launch
         bindCard(

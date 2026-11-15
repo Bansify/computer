@@ -92,6 +92,8 @@ Implementation + relevant automated tests + device verification + accessibility/
 
 **Outcome:** Four input types work together; shortcuts have explicit scope, conflict handling and honest Android/OEM limitations.
 
+**Progress:** A limited opt-in, per-device foreground shortcut editor and mapping policy now exist for Start, Search and Quick settings, with conflict rejection and clear-all. Legacy mappings remain unchanged. Individual editing, optional cross-app behavior, full input parity, automation and physical-device validation remain open; see [release blockers](docs/REMAINING_RELEASE_WORK.md).
+
 ### 3A. Input parity
 
 - [ ] Create a shared input/action layer separating physical events from launcher actions. Specify priority for focused text fields, dialogs, windows and system keys; consume only events actually handled. Keep accessibility semantics and existing D-pad behavior intact.

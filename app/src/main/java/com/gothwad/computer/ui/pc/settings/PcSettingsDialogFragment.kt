@@ -152,7 +152,8 @@ class PcSettingsDialogFragment : DialogFragment() {
             context = requireContext(),
             scope = viewLifecycleOwner.lifecycleScope,
             config = currentConfig,
-            onConfigChanged = { cfg -> onConfigChanged(cfg) }
+            onConfigChanged = { cfg -> onConfigChanged(cfg) },
+            onOpenShortcuts = { ShortcutSettingsDialogFragment.create().show(childFragmentManager, "shortcuts") }
         )
 
         otherTabs = PcSettingsOtherTabs(
