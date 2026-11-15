@@ -120,6 +120,8 @@ Implementation + relevant automated tests + device verification + accessibility/
 
 **Outcome:** No misleading lock or privacy promises; optional built-ins are isolated and do not take down Home.
 
+**Progress:** A shared launcher-level app-lock decision is applied to desktop, built-in shortcut and settings launch paths; malformed empty app-lock credentials fail closed. The misleading private mode, unsafe browser uploads/drop and automatic website permissions are disabled; browser records use atomic serialized writes; Store navigation/resource restrictions and offline icon fallback were added. These are partial mitigations, not security sign-off: notifications, overlays, credential migration, backups, WebView and storage still need comprehensive review and testing. See [release blockers](docs/REMAINING_RELEASE_WORK.md).
+
 ### 4A. Launcher locks and data
 
 - [ ] Centralize authorization for all launcher-originated app actions, including desktop, search, pinned/taskbar, built-ins, web shortcuts, overlay and `MainActivity.onNewIntent("OPEN_APP")`. Restrict/validate exported intents and explicitly test initial activity creation vs `onNewIntent`. Avoid confused-deputy launch paths.
