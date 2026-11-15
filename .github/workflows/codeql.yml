@@ -41,9 +41,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/wrapper-validation@v4
+      - uses: gradle/actions/wrapper-validation@v6
         if: matrix.build-mode == 'manual'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         if: matrix.build-mode == 'manual'
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
