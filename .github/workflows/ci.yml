@@ -75,9 +75,13 @@ jobs:
           if-no-files-found: error
 
   emulator:
-    name: Android emulator Home smoke tests
+    name: Android ${{ matrix.api }} emulator smoke tests
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [21, 29, 34]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -93,10 +97,10 @@ jobs:
             sudo udevadm control --reload-rules
             sudo udevadm trigger --name-match=kvm
           fi
-      - name: Run Android 29 emulator tests
+      - name: Run Android emulator tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 29
+          api-level: ${{ matrix.api }}
           target: google_apis
           arch: x86_64
           disable-animations: true
@@ -107,7 +111,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-emulator-test-reports
+          name: android-emulator-${{ matrix.api }}-test-reports
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/

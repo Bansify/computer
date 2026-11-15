@@ -11,6 +11,9 @@ Gothwad Computer is a Kotlin Android application that presents a desktop-style e
 - In-app floating windows for File Manager, Web Browser and Gothwad Store.
 - Browser-based shortcuts (`pwa://` entries), not separately installed Android packages.
 - Optional launcher-level app/device locks, overlay taskbar, custom wallpaper and display settings. These are **not substitutes for Android system security**.
+- Limited, opt-in per-device shortcuts for Start, Search and Quick Settings under System settings. They work only on the Home desktop; Android may reserve or withhold keys.
+
+Private browsing, browser uploads/file drops and website camera/microphone/location are currently unavailable. Normal browser sessions share WebView data; some websites may not work. File moves across filesystems are unavailable to avoid unsafe copy/delete. See [release blockers and limitations](docs/REMAINING_RELEASE_WORK.md).
 
 The UI uses **Android Views, XML, ViewBinding, Fragments and RecyclerView**. Do not add Compose: see [AGENTS.md](AGENTS.md).
 
@@ -49,6 +52,7 @@ Release builds are unsigned by default. For local testing only, `-PlocalSign` us
 - [Full project analysis and developer guide](docs/PROJECT_ANALYSIS.md): architecture, flows, storage, permissions, security findings, build/CI and test plan.
 - [Developer rules](AGENTS.md): native-Views-only architecture.
 - [Five-phase Home launcher master plan](task.md): consolidated roadmap, acceptance gates and release-readiness criteria.
+- [Release blockers and limitations](docs/REMAINING_RELEASE_WORK.md): unfinished gates and deliberately disabled unsafe features.
 - [Historical lock design notes](docs/task-lock-system.md): superseded by the master plan; do not use as an implementation specification.
 
 ## License
