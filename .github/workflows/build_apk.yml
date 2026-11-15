@@ -173,7 +173,7 @@ jobs:
           echo "Keystore securely cleaned up."
 
       - name: Upload Signed Release APK, Debug APK & AAB Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Gothwad-Computer-v${{ steps.versioning.outputs.v_name }}-Build${{ steps.versioning.outputs.v_code }}
           path: output_release/

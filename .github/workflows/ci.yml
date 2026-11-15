@@ -59,7 +59,7 @@ jobs:
           PYCODE
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-ci-reports
           path: |
@@ -68,7 +68,7 @@ jobs:
           if-no-files-found: ignore
       - name: Upload debug APK
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: debug-apk
           path: app/build/outputs/apk/debug/*.apk
@@ -109,7 +109,7 @@ jobs:
           script: bash .github/scripts/run-device-tests.sh
       - name: Upload instrumentation reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-emulator-${{ matrix.api }}-test-reports
           path: |
