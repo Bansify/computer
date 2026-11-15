@@ -119,5 +119,5 @@ dependencies {
     // startup + scroll paths are AOT-compiled on first run instead of JIT'd —
     // the big cold-start "screen shows but not smooth yet" win.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.13.0")
 }
