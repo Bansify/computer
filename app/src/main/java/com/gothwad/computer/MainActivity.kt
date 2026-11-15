@@ -156,7 +156,7 @@ class MainActivity : AppCompatActivity() {
                 throw e
             } catch (e: Exception) {
                 // Keep stored bytes untouched and do not assume an unreadable lock is disabled.
-                android.util.Log.w("MainActivity", "Launcher configuration unavailable", e)
+                android.util.Log.w("MainActivity", "Launcher configuration unavailable")
                 showRecovery(configReadable = false)
                 return@launch
             }
@@ -217,6 +217,12 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             android.util.Log.e("MainActivity", "Desktop startup failed", e)
+            StartupRecovery.recordUncaughtStartupCrash(this)
+            runCatching {
+                supportFragmentManager.findFragmentById(R.id.nav_host_fragment)?.let {
+                    supportFragmentManager.beginTransaction().remove(it).commitNow()
+                }
+            }
             recoveryMode = true
             showRecovery(configReadable = true)
         }
