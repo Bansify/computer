@@ -56,5 +56,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p release-baseline
-          gh release download v1.0.20 --pattern 'GothwadComputer-v1.0.20-Release.apk' --dir release-baseline
-          bash .github/scripts/check-release-apk.sh release-baseline/GothwadComputer-v1.0.20-Release.apk
+          set +e
+          {
+            gh release download v1.0.20 --pattern 'GothwadComputer-v1.0.20-Release.apk' --dir release-baseline &&
+              bash .github/scripts/check-release-apk.sh release-baseline/GothwadComputer-v1.0.20-Release.apk
+          } > baseline.log 2>&1
+          result=$?
+          cat baseline.log
+          if [ "$result" -ne 0 ]; then
+            python3 - <<'PYCODE'
+          from pathlib import Path
+          text = Path('baseline.log').read_text(errors='replace')[:4000]
+          print('::error::' + text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+          PYCODE
+          fi
+          exit "$result"
