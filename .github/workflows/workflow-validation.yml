@@ -30,7 +30,9 @@ jobs:
         shell: bash
         run: |
           set +e
-          actionlint -no-color > actionlint.log 2>&1
+          # GitHub supports queue: max; actionlint v1.7.12 does not recognize it yet.
+          # Ignore only that parser diagnostic, not other concurrency or workflow errors.
+          actionlint -no-color -ignore 'unexpected key "queue" for "concurrency" section' > actionlint.log 2>&1
           result=$?
           cat actionlint.log
           if [ "$result" -ne 0 ]; then
