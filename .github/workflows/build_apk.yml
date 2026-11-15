@@ -1,7 +1,8 @@
 name: Build Signed Release APK & Play Store AAB
 
-# Publishing is deliberate: merging to the default branch must not publish a release.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       version_name:
@@ -14,18 +15,40 @@ on:
         default: ''
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  validate:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   build:
     name: Build & Sign APK & AAB
+    needs: validate
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: production-release
+      queue: max
 
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Avoid publishing an outdated main commit
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          current=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ -z "$current" ] || [ "$current" != "$GITHUB_SHA" ]; then
+            echo "Main has moved on; refusing to publish this older commit." >&2
+            exit 1
+          fi
 
       - name: Set up Java 17 (JDK)
         uses: actions/setup-java@v5
@@ -39,35 +62,10 @@ jobs:
       - name: Determine Version Code and Name
         id: versioning
         env:
+          GH_TOKEN: ${{ github.token }}
           INPUT_VERSION_CODE: ${{ inputs.version_code }}
           INPUT_VERSION_NAME: ${{ inputs.version_name }}
-        run: |
-          if [ -n "$INPUT_VERSION_CODE" ]; then
-            V_CODE="$INPUT_VERSION_CODE"
-          else
-            V_CODE=$(( 10 + GITHUB_RUN_NUMBER ))
-          fi
-
-          if [ -n "$INPUT_VERSION_NAME" ]; then
-            V_NAME="$INPUT_VERSION_NAME"
-          else
-            # Auto-incrementing version name based on version code
-            V_NAME="1.0.${V_CODE}"
-          fi
-
-          if ! [[ "$V_CODE" =~ ^[1-9][0-9]{0,9}$ ]] || (( 10#$V_CODE > 2100000000 )); then
-            echo "Invalid Android version code" >&2
-            exit 1
-          fi
-          if ! [[ "$V_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]{0,79}$ ]]; then
-            echo "Invalid version name" >&2
-            exit 1
-          fi
-
-          echo "Determined Version Code: $V_CODE"
-          echo "Determined Version Name: $V_NAME"
-          echo "v_code=$V_CODE" >> "$GITHUB_OUTPUT"
-          echo "v_name=$V_NAME" >> "$GITHUB_OUTPUT"
+        run: python3 .github/scripts/release_version.py
 
       - name: Build Release APK, Debug APK and AAB Bundle with Gradle
         run: |
@@ -97,6 +95,10 @@ jobs:
           UNSIGNED_AAB=$(find app/build/outputs/bundle/release/ -name "*.aab" | head -n 1)
           
           mkdir -p output_release
+          test -s "$UNSIGNED_APK" && test -s "$DEBUG_APK" && test -s "$UNSIGNED_AAB" || {
+            echo "Missing APK or AAB build output" >&2
+            exit 1
+          }
 
           # 0. Copy Debug APK directly (already signed with debug keystore)
           if [ -n "$DEBUG_APK" ]; then
@@ -116,6 +118,7 @@ jobs:
           fi
 
           KS_PATH="/tmp/gothwad_release_key.jks"
+          trap 'rm -f "$KS_PATH" /tmp/unaligned_temp.apk' EXIT
           echo "Decoding permanent release keystore from GitHub Secrets..."
           echo "$KEYSTORE_BASE64" | base64 -d > "$KS_PATH"
 
@@ -136,11 +139,13 @@ jobs:
           ZIPALIGN=$(find "$ANDROID_HOME/build-tools/" -name "zipalign" | sort -V | tail -n 1)
           APKSIGNER=$(find "$ANDROID_HOME/build-tools/" -name "apksigner" | sort -V | tail -n 1)
           
+          test -n "$ZIPALIGN" && test -n "$APKSIGNER" || { echo "Android signing tools missing" >&2; exit 1; }
+
           # 1. Sign APK
           if [ -n "$UNSIGNED_APK" ]; then
             UNALIGNED_TEMP="/tmp/unaligned_temp.apk"
             if [ -n "$ZIPALIGN" ]; then
-              "$ZIPALIGN" -v -p 4 "$UNSIGNED_APK" "$UNALIGNED_TEMP" || cp "$UNSIGNED_APK" "$UNALIGNED_TEMP"
+              "$ZIPALIGN" -v -p 4 "$UNSIGNED_APK" "$UNALIGNED_TEMP"
             else
               cp "$UNSIGNED_APK" "$UNALIGNED_TEMP"
             fi
@@ -165,6 +170,7 @@ jobs:
               -storepass "$KEYSTORE_PASS" -keypass "$KEY_PASS" \
               "output_release/GothwadComputer-v${V_NAME}-PlayStore.aab" \
               "$ACTUAL_ALIAS"
+            jarsigner -verify "output_release/GothwadComputer-v${V_NAME}-PlayStore.aab"
             echo "Successfully signed Play Store AAB!"
           fi
 
@@ -184,6 +190,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ steps.versioning.outputs.v_name }}
+          target_commitish: ${{ github.sha }}
+          fail_on_unmatched_files: true
           name: v${{ steps.versioning.outputs.v_name }}
           draft: false
           prerelease: false

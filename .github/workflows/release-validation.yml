@@ -1,0 +1,43 @@
+name: Release workflow dry run
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/build_apk.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/release-validation.yml'
+      - '.github/scripts/release_version.py'
+      - '.github/scripts/tests/**'
+  push:
+    branches: ['arena/**']
+    paths:
+      - '.github/workflows/build_apk.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/release-validation.yml'
+      - '.github/scripts/release_version.py'
+      - '.github/scripts/tests/**'
+
+permissions:
+  contents: read
+
+jobs:
+  # Exercise the exact reusable CI gate without signing secrets or publishing.
+  validate:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  version:
+    name: Dry-run release version selection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select a hypothetical next version (does not create a tag or release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/release_version.py

@@ -24,6 +24,8 @@ jobs:
           cache: false
       - name: Install pinned actionlint
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Test release version allocation
+        run: python3 -m unittest discover -s .github/scripts/tests -v
       - name: Check workflow syntax and expressions
         shell: bash
         run: |
