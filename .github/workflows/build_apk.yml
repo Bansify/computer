@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      dry_run:
+        description: 'Build and sign without publishing (required outside main)'
+        type: boolean
+        default: false
       version_name:
         description: 'Version Name (e.g. 1.0.6 - leave empty for auto 1.0.X)'
         required: false
@@ -19,7 +23,7 @@ permissions:
 
 jobs:
   validate:
-    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || inputs.dry_run
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
@@ -178,15 +182,12 @@ jobs:
           rm -f "$KS_PATH"
           echo "Keystore securely cleaned up."
 
-      - name: Verify upgrade signing against v1.0.20
+      - name: Verify package, version and release signing certificate
         env:
-          GH_TOKEN: ${{ github.token }}
           V_NAME: ${{ steps.versioning.outputs.v_name }}
           V_CODE: ${{ steps.versioning.outputs.v_code }}
         run: |
-          mkdir -p release-baseline
-          gh release download v1.0.20 --pattern 'GothwadComputer-v1.0.20-Release.apk' --dir release-baseline
-          bash .github/scripts/check-release-apk.sh release-baseline/GothwadComputer-v1.0.20-Release.apk "output_release/GothwadComputer-v${V_NAME}-Release.apk" "$V_CODE"
+          bash .github/scripts/check-release-apk.sh "output_release/GothwadComputer-v${V_NAME}-Release.apk" "$V_CODE" .github/release-signing-sha256.txt
 
       - name: Upload Signed Release APK, Debug APK & AAB Artifacts
         uses: actions/upload-artifact@v7
@@ -195,6 +196,7 @@ jobs:
           path: output_release/
 
       - name: Create Automatic GitHub Release
+        if: github.event_name != 'workflow_dispatch' || !inputs.dry_run
         uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -206,6 +208,8 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          body: |
+            **Signing key change:** This release uses a different signing key from v1.0.20. Android may reject an in-place update from v1.0.20; uninstalling the old app can delete its local data. Back up data first and verify recovery on a test device. Keep an alternate launcher installed.
           files: |
             output_release/GothwadComputer-v${{ steps.versioning.outputs.v_name }}-Release.apk
             output_release/GothwadComputer-v${{ steps.versioning.outputs.v_name }}-Debug.apk
