@@ -163,15 +163,12 @@ jobs:
           rm -f "$KS_PATH"
           echo "Keystore securely cleaned up."
 
-      - name: Verify upgrade signing against v1.0.20
+      - name: Verify package, version and release signing certificate
         env:
-          GH_TOKEN: ${{ github.token }}
           V_NAME: ${{ steps.versioning.outputs.v_name }}
           V_CODE: ${{ steps.versioning.outputs.v_code }}
         run: |
-          mkdir -p release-baseline
-          gh release download v1.0.20 --pattern 'GothwadComputer-v1.0.20-Release.apk' --dir release-baseline
-          bash .github/scripts/check-release-apk.sh release-baseline/GothwadComputer-v1.0.20-Release.apk "release_out/GothwadComputer-v${V_NAME}-Release.apk" "$V_CODE"
+          bash .github/scripts/check-release-apk.sh "release_out/GothwadComputer-v${V_NAME}-Release.apk" "$V_CODE" .github/release-signing-sha256.txt
 
       - name: Upload Release Artifacts
         uses: actions/upload-artifact@v7
@@ -191,6 +188,8 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          body: |
+            **Signing key change:** This release uses a different signing key from v1.0.20. Android may reject an in-place update from v1.0.20; uninstalling the old app can delete its local data. Back up data first and verify recovery on a test device. Keep an alternate launcher installed.
           files: |
             release_out/GothwadComputer-v${{ steps.versioning.outputs.v_name }}-Release.apk
             release_out/GothwadComputer-v${{ steps.versioning.outputs.v_name }}-Debug.apk
