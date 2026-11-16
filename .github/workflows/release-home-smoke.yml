@@ -19,11 +19,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { api: 21, target: google_apis }
-          - { api: 29, target: google_apis }
-          - { api: 34, target: google_apis }
-          - { api: 29, target: android-tv }
-          - { api: 34, target: android-tv }
+          - { api: 21, target: google_apis, arch: x86_64 }
+          - { api: 29, target: google_apis, arch: x86_64 }
+          - { api: 34, target: google_apis, arch: x86_64 }
+          - { api: 29, target: android-tv, arch: x86 }
+          - { api: 34, target: android-tv, arch: x86 }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,14 +41,6 @@ jobs:
             sudo udevadm control --reload-rules
             sudo udevadm trigger --name-match=kvm
           fi
-      - name: Report available TV system images
-        if: matrix.target == 'android-tv'
-        shell: bash
-        run: |
-          set +e
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list > sdk-images.log 2>&1
-          grep -E 'system-images;android-(29|34);(android-tv|google-tv);' sdk-images.log | head -n 30 | while IFS= read -r line; do echo "::notice::$line"; done
-
       - name: Build, install and launch minified release (local debug key)
         uses: reactivecircus/android-emulator-runner@v2
         env:
@@ -56,7 +48,7 @@ jobs:
         with:
           api-level: ${{ matrix.api }}
           target: ${{ matrix.target }}
-          arch: x86_64
+          arch: ${{ matrix.arch }}
           disable-animations: true
           emulator-boot-timeout: 600
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
@@ -69,4 +61,5 @@ jobs:
           path: |
             release-ui-*.xml
             release-logcat-*.log
+            release-dump-*.log
           if-no-files-found: ignore

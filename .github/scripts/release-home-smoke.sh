@@ -13,10 +13,12 @@ inspect_home() {
   adb install "$package"
   adb shell am force-stop com.gothwad.computer
   adb logcat -c
+  adb shell input keyevent KEYCODE_WAKEUP || true
+  adb shell wm dismiss-keyguard || true
   adb shell am start -W -n com.gothwad.computer/.MainActivity
-  for attempt in $(seq 1 20); do
+  for attempt in $(seq 1 8); do
     adb shell rm -f /data/local/tmp/gothwad-window.xml
-    adb shell uiautomator dump /data/local/tmp/gothwad-window.xml >/dev/null 2>&1 || true
+    timeout 20s adb shell uiautomator dump /data/local/tmp/gothwad-window.xml > "release-dump-${label}.log" 2>&1 || true
     adb exec-out cat /data/local/tmp/gothwad-window.xml > "release-ui-${label}.xml" 2>/dev/null || true
     if grep -q 'com.gothwad.computer:id/safe_retry' "release-ui-${label}.xml"; then
       echo "::${level}::${label}: Recovery appeared instead of the normal desktop."
@@ -32,7 +34,7 @@ inspect_home() {
     # A frame appearing once is not proof that startup remains healthy.
     sleep 8
     adb shell rm -f /data/local/tmp/gothwad-window.xml
-    adb shell uiautomator dump /data/local/tmp/gothwad-window.xml >/dev/null 2>&1 || true
+    timeout 20s adb shell uiautomator dump /data/local/tmp/gothwad-window.xml > "release-dump-${label}.log" 2>&1 || true
     adb exec-out cat /data/local/tmp/gothwad-window.xml > "release-ui-${label}.xml" 2>/dev/null || true
     if ! grep -q 'com.gothwad.computer:id/btn_start' "release-ui-${label}.xml" || grep -q 'com.gothwad.computer:id/safe_retry' "release-ui-${label}.xml"; then
       ready=0
@@ -50,6 +52,7 @@ selected = [line for line in text if any(x in line for x in ('FATAL EXCEPTION', 
 message = '\n'.join(selected[-60:])[:10000].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
 print(f'::{level}::{label} did not reach a stable desktop. {message}')
 print(f'::{level}::UI hierarchy: ' + Path(f'release-ui-{label}.xml').read_text(errors='replace')[:4000].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+print(f'::{level}::UI dump command: ' + Path(f'release-dump-{label}.log').read_text(errors='replace')[:2000].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
 PY
     return 1
   fi
