@@ -41,6 +41,14 @@ jobs:
             sudo udevadm control --reload-rules
             sudo udevadm trigger --name-match=kvm
           fi
+      - name: Report available TV system images
+        if: matrix.target == 'android-tv'
+        shell: bash
+        run: |
+          set +e
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list > sdk-images.log 2>&1
+          grep -E 'system-images;android-(29|34);(android-tv|google-tv);' sdk-images.log | head -n 30 | while IFS= read -r line; do echo "::notice::$line"; done
+
       - name: Build, install and launch minified release (local debug key)
         uses: reactivecircus/android-emulator-runner@v2
         env:

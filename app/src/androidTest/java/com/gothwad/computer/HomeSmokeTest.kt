@@ -111,7 +111,6 @@ class HomeSmokeTest {
                 assertTrue(report.contains("DESKTOP_START_FAILURE"))
                 assertFalse("Exception messages must not be logged", report.contains("Debug desktop fault"))
                 scenario.onActivity { activity ->
-                    activity.intent = Intent(activity, MainActivity::class.java)
                     activity.findViewById<View>(R.id.safe_retry).performClick()
                 }
                 var desktopReady = false

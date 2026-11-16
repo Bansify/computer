@@ -6,8 +6,12 @@ import android.content.Intent
 internal object StartupTestHooks {
     const val ACTION_CRASH_STARTUP = "com.gothwad.computer.DEBUG_CRASH_STARTUP"
     private const val ACTION_FAIL_DESKTOP = "com.gothwad.computer.DEBUG_FAIL_DESKTOP"
+    private var lastDesktopFaultIntent: Intent? = null
     fun beforeDesktop(intent: Intent?) {
-        if (intent?.action == ACTION_FAIL_DESKTOP) throw IllegalStateException("Debug desktop fault")
+        if (intent?.action == ACTION_FAIL_DESKTOP && intent !== lastDesktopFaultIntent) {
+            lastDesktopFaultIntent = intent
+            throw IllegalStateException("Debug desktop fault")
+        }
     }
 
     fun beforeStartup(intent: Intent?) {
