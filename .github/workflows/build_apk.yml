@@ -33,7 +33,8 @@ jobs:
           java-version: '17'
       - name: Inspect signing certificate without exposing secrets
         env:
-          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 || secrets.KEYSTORE_BASE64 }}
+          PRIMARY_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          FALLBACK_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: python3 .github/scripts/inspect-signing-key.py
