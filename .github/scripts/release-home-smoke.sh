@@ -6,12 +6,17 @@ apk=$(find app/build/outputs/apk/release -name '*.apk' -type f -print -quit)
 test -n "$apk"
 mkdir -p old-release
 # Test the exact published APK as evidence, separately from the new candidate.
-gh release download v1.0.21 --pattern 'GothwadComputer-v1.0.21-Release.apk' --dir old-release
+old_available=0
+if gh release download v1.0.21 --pattern 'GothwadComputer-v1.0.21-Release.apk' --dir old-release; then
+  old_available=1
+else
+  echo '::warning::Could not download the published v1.0.21 APK for comparison; candidate testing is still required.'
+fi
 
 inspect_home() {
   local package=$1 label=$2 level=$3 ready=0 attempt
-  adb install "$package"
-  adb shell am force-stop com.gothwad.computer
+  adb install "$package" || { echo "::${level}::${label}: APK installation failed"; return 1; }
+  adb shell am force-stop com.gothwad.computer || { echo "::${level}::${label}: force-stop failed"; return 1; }
   adb logcat -c
   adb shell input keyevent KEYCODE_WAKEUP || true
   adb shell wm dismiss-keyguard || true
@@ -47,7 +52,7 @@ inspect_home() {
     fi
   fi
   adb logcat -d -v brief > "release-logcat-${label}.log"
-  adb uninstall com.gothwad.computer >/dev/null
+  adb uninstall com.gothwad.computer >/dev/null || { echo "::error::Could not clean up emulator installation"; exit 1; }
   if [ "$ready" -ne 1 ]; then
     LEVEL="$level" LABEL="$label" python3 - <<'PY'
 import os
@@ -68,7 +73,9 @@ PY
 }
 
 # A known old failure is reported as a warning but must not conceal a new failure.
-if ! inspect_home old-release/GothwadComputer-v1.0.21-Release.apk published warning; then
-  echo 'Published v1.0.21 did not pass this emulator smoke test.'
+if [ "$old_available" -eq 1 ]; then
+  if ! inspect_home old-release/GothwadComputer-v1.0.21-Release.apk published warning; then
+    echo 'Published v1.0.21 did not pass this emulator smoke test.'
+  fi
 fi
 inspect_home "$apk" candidate error

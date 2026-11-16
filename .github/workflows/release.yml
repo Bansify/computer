@@ -25,9 +25,15 @@ jobs:
     permissions:
       contents: read
 
+  release_home:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/release-home-smoke.yml
+    permissions:
+      contents: read
+
   build_release:
     name: Build & Publish Release
-    needs: validate
+    needs: [validate, release_home]
     runs-on: ubuntu-latest
     permissions:
       contents: write

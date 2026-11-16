@@ -28,9 +28,15 @@ jobs:
     permissions:
       contents: read
 
+  release_home:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || inputs.dry_run
+    uses: ./.github/workflows/release-home-smoke.yml
+    permissions:
+      contents: read
+
   build:
     name: Build & Sign APK & AAB
-    needs: validate
+    needs: [validate, release_home]
     runs-on: ubuntu-latest
     permissions:
       contents: write
