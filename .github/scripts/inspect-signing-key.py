@@ -48,6 +48,9 @@ def inspect(label, encoded):
         print(f'::notice::{label}: private key entries inspected: {len(aliases)}')
         print(f'::notice::{label}: contains v1.0.20 certificate: {"yes" if matches else "no"}')
         print(f'::notice::{label}: selected alias matches v1.0.20: {"yes" if selected.lower() in matches else "no"}')
+        selected_fingerprints = [digest for alias, digest in aliases if alias.lower() == selected.lower()]
+        if selected_fingerprints:
+            print(f'::notice::{label}: selected public certificate SHA-256: {selected_fingerprints[0]}')
 
 
 inspect('Primary release keystore', os.environ.get('PRIMARY_KEYSTORE', ''))
