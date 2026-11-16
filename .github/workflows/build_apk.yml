@@ -195,6 +195,13 @@ jobs:
           name: Gothwad-Computer-v${{ steps.versioning.outputs.v_name }}-Build${{ steps.versioning.outputs.v_code }}
           path: output_release/
 
+      - name: Upload release crash symbol mapping
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-r8-mapping-${{ github.run_id }}
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+
       - name: Create Automatic GitHub Release
         if: github.event_name != 'workflow_dispatch' || !inputs.dry_run
         uses: softprops/action-gh-release@v3

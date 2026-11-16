@@ -35,3 +35,7 @@ Record commit/build, build variant/signature, date, device model/OEM, Android ve
 ## Measurements to capture before choosing budgets
 
 On named real TV and tablet models, record cold start (force-stop, launch Home), warm Home return from another app, idle and startup memory, input-to-focus response, frame/jank traces, and failures over repeated launches. State measurement commands/tool versions, sample count, median/worst result and device conditions. Agree budgets using actual data; no numbers are implied by this plan.
+
+## Reported v1.0.21 incident
+
+The real-device startup/recovery report is under investigation. See [STARTUP_INCIDENT.md](STARTUP_INCIDENT.md) for safe evidence collection, the release-build emulator checks and privacy limits. Do not assume that a green debug test explains the owner’s device.

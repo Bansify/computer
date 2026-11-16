@@ -5,19 +5,25 @@ on:
     branches: ['arena/**']
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
   smoke:
-    name: Release Home Android ${{ matrix.api }}
+    name: Release Home ${{ matrix.target }} Android ${{ matrix.api }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        api: [21, 29, 34]
+        include:
+          - { api: 21, target: google_apis }
+          - { api: 29, target: google_apis }
+          - { api: 34, target: google_apis }
+          - { api: 29, target: android-tv }
+          - { api: 34, target: android-tv }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,9 +43,11 @@ jobs:
           fi
       - name: Build, install and launch minified release (local debug key)
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GH_TOKEN: ${{ github.token }}
         with:
           api-level: ${{ matrix.api }}
-          target: google_apis
+          target: ${{ matrix.target }}
           arch: x86_64
           disable-animations: true
           emulator-boot-timeout: 600
@@ -49,8 +57,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: release-home-${{ matrix.api }}-diagnostics
+          name: release-home-${{ matrix.target }}-${{ matrix.api }}-diagnostics
           path: |
-            release-ui.xml
-            release-logcat.log
+            release-ui-*.xml
+            release-logcat-*.log
           if-no-files-found: ignore

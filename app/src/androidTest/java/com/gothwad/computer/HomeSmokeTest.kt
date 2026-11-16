@@ -86,6 +86,49 @@ class HomeSmokeTest {
         }
     }
 
+    @Test fun caughtDesktopFailureRecordsRedactedDiagnosticAndCanRetry() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("startup_recovery", Context.MODE_PRIVATE)
+        val originalCount = prefs.getInt("startup_crashes", 0)
+        val diagnostic = File(context.filesDir, GothwadApplication.CRASH_LOG_FILE)
+        val previousLog = if (diagnostic.exists()) diagnostic.readBytes() else null
+        prefs.edit().clear().commit()
+        try {
+            val intent = Intent(context, MainActivity::class.java).apply {
+                action = "com.gothwad.computer.DEBUG_FAIL_DESKTOP"
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ActivityScenario.launch<MainActivity>(intent).use { scenario ->
+                var recoveryReady = false
+                repeat(80) {
+                    if (!recoveryReady) {
+                        scenario.onActivity { recoveryReady = it.findViewById<View>(R.id.safe_retry) != null }
+                        if (!recoveryReady) SystemClock.sleep(250)
+                    }
+                }
+                assertTrue("Injected desktop error should show recovery", recoveryReady)
+                val report = diagnostic.readText()
+                assertTrue(report.contains("DESKTOP_START_FAILURE"))
+                assertFalse("Exception messages must not be logged", report.contains("Debug desktop fault"))
+                scenario.onActivity { activity ->
+                    activity.intent = Intent(activity, MainActivity::class.java)
+                    activity.findViewById<View>(R.id.safe_retry).performClick()
+                }
+                var desktopReady = false
+                repeat(80) {
+                    if (!desktopReady) {
+                        scenario.onActivity { desktopReady = it.findViewById<View>(R.id.btn_start) != null }
+                        if (!desktopReady) SystemClock.sleep(250)
+                    }
+                }
+                assertTrue("Retry should open the normal desktop", desktopReady)
+            }
+        } finally {
+            if (previousLog == null) diagnostic.delete() else diagnostic.writeBytes(previousLog)
+            prefs.edit().putInt("startup_crashes", originalCount).commit()
+        }
+    }
+
     @Test fun remoteCanOpenStartAndBackDoesNotExitHome() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.getSharedPreferences("startup_recovery", Context.MODE_PRIVATE).edit().clear().commit()

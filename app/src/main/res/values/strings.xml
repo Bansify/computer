@@ -3,7 +3,7 @@
     <string name="app_name">Gothwad Computer</string>
     <string name="safe_home_title">Gothwad Computer: recovery</string>
     <string name="safe_home_loading">Loading launcher settings…</string>
-    <string name="safe_home_message">The desktop had repeated startup errors. Your settings have not been erased. You can retry, open Android settings, or choose another Home app.</string>
+    <string name="safe_home_message">The desktop could not start, or previous startup errors were recorded. Your settings have not been erased. You can retry, open Android settings, or choose another Home app.</string>
     <string name="safe_home_config_error">Your launcher settings could not be read, so app access is unavailable here to avoid bypassing a saved lock. No settings were erased. You can open Android settings or choose another Home app.</string>
     <string name="safe_home_retry">Retry normal desktop</string>
     <string name="safe_home_retry_config">Retry reading settings</string>

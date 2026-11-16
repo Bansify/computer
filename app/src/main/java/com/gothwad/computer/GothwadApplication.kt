@@ -3,10 +3,8 @@ package com.gothwad.computer
 import android.app.Application
 import android.content.Context
 import android.util.Log
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.gothwad.computer.data.StartupDiagnostics
+import com.gothwad.computer.data.StartupIssue
 
 /**
  * Custom Application class for Gothwad Computer PC Emulator.
@@ -47,41 +45,14 @@ class GothwadApplication : Application() {
             try {
                 // Do not write exception messages/stack traces to logcat: they may contain user data.
                 Log.e(TAG, "Uncaught exception during app execution (${throwable.javaClass.name})")
-                com.gothwad.computer.data.StartupRecovery.recordUncaughtStartupCrash(this)
-                logCrashToFile(throwable)
+                // Record diagnostic even if saving the recovery counter fails.
+                runCatching { com.gothwad.computer.data.StartupRecovery.recordUncaughtStartupCrash(this) }
+                StartupDiagnostics.record(this, StartupIssue.UNCAUGHT_EXCEPTION, throwable)
             } catch (e: Exception) {
                 Log.e(TAG, "Error logging crash", e)
             } finally {
                 previousHandler?.uncaughtException(thread, throwable)
             }
-        }
-    }
-
-    private fun logCrashToFile(throwable: Throwable) {
-        runCatching {
-            val crashFile = File(filesDir, CRASH_LOG_FILE)
-            // Keep crash file bounded: if it exceeds 64KB, truncate it
-            if (crashFile.exists() && crashFile.length() > 64 * 1024) {
-                crashFile.delete()
-            }
-
-            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
-            // Keep exception types and code locations, not exception messages or user-supplied data.
-            val report = buildString {
-                append("[$timestamp] EXCEPTION:\n")
-                var current: Throwable? = throwable
-                repeat(5) {
-                    val cause = current ?: return@repeat
-                    append(cause.javaClass.name).append('\n')
-                    cause.stackTrace.take(40).forEach { frame ->
-                        append("  ").append(frame.className).append('.').append(frame.methodName)
-                            .append(':').append(frame.lineNumber).append('\n')
-                    }
-                    current = cause.cause?.takeUnless { it === cause }
-                }
-                append("--------------------\n")
-            }
-            crashFile.appendText(report.take(16 * 1024))
         }
     }
 

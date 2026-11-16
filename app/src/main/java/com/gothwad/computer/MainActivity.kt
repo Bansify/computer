@@ -34,6 +34,8 @@ import com.gothwad.computer.data.MODE_PC
 import com.gothwad.computer.data.NetStatus
 import com.gothwad.computer.data.HomeSettings
 import com.gothwad.computer.data.StartupRecovery
+import com.gothwad.computer.data.StartupDiagnostics
+import com.gothwad.computer.data.StartupIssue
 import com.gothwad.computer.databinding.ViewSafeHomeBinding
 import com.gothwad.computer.databinding.ActivityMainBinding
 import com.gothwad.computer.ui.dialogs.NotificationBottomSheetFragment
@@ -182,6 +184,7 @@ class MainActivity : AppCompatActivity() {
             val config = try {
                 withTimeout(15_000) { ConfigStore(this@MainActivity).flow.first() }
             } catch (e: TimeoutCancellationException) {
+                StartupDiagnostics.record(this@MainActivity, StartupIssue.CONFIG_TIMEOUT, e)
                 showRecovery(configReadable = false)
                 return@launch
             } catch (e: CancellationException) {
@@ -189,6 +192,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 // Keep stored bytes untouched and do not assume an unreadable lock is disabled.
                 android.util.Log.w("MainActivity", "Launcher configuration unavailable")
+                StartupDiagnostics.record(this@MainActivity, StartupIssue.CONFIG_READ_FAILURE, e)
                 showRecovery(configReadable = false)
                 return@launch
             }
@@ -196,6 +200,7 @@ class MainActivity : AppCompatActivity() {
             if ((config.deviceLock.enabled && config.deviceLock.value.isEmpty()) ||
                 (config.appLock.enabled && config.lockedApps.isNotEmpty() && config.appLock.value.isEmpty())) {
                 // Inconsistent credentials must not be interpreted as unlocked.
+                StartupDiagnostics.record(this@MainActivity, StartupIssue.CONFIG_CREDENTIAL_INCOMPLETE)
                 showRecovery(configReadable = false)
                 return@launch
             }
@@ -221,7 +226,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun afterUnlock() {
-        if (recoveryMode) showRecovery(configReadable = true) else startNormalDesktop()
+        if (recoveryMode) {
+            StartupDiagnostics.record(this, StartupIssue.PREVIOUS_STARTUP_FAILURES)
+            showRecovery(configReadable = true)
+        } else startNormalDesktop()
     }
 
     private fun startNormalDesktop() {
@@ -230,6 +238,7 @@ class MainActivity : AppCompatActivity() {
         binding.deviceLockContainer.removeAllViews()
         binding.deviceLockContainer.visibility = View.GONE
         try {
+            StartupTestHooks.beforeDesktop(intent)
             if (supportFragmentManager.findFragmentById(R.id.nav_host_fragment) == null) {
                 val navHost = NavHostFragment.create(R.navigation.nav_graph)
                 supportFragmentManager.beginTransaction()
@@ -249,8 +258,9 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Desktop startup failed", e)
-            StartupRecovery.recordUncaughtStartupCrash(this)
+            android.util.Log.e("MainActivity", "Desktop startup failed (${e.javaClass.name})")
+            StartupDiagnostics.record(this, StartupIssue.DESKTOP_START_FAILURE, e)
+            runCatching { StartupRecovery.recordUncaughtStartupCrash(this) }
             runCatching {
                 supportFragmentManager.findFragmentById(R.id.nav_host_fragment)?.let {
                     supportFragmentManager.beginTransaction().remove(it).commitNow()
@@ -440,7 +450,7 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 configStore.flow.catch { error ->
                     if (error is CancellationException) throw error
-                    onConfigurationUnavailable()
+                    onConfigurationUnavailable(error)
                 }.collectLatest { config ->
                     currentConfig = config
                 }
@@ -448,8 +458,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun onConfigurationUnavailable() {
+    fun onConfigurationUnavailable(error: Throwable? = null) {
         if (safeBinding != null && !configReady) return
+        StartupDiagnostics.record(this, StartupIssue.CONFIG_OBSERVER_FAILURE, error)
         showRecovery(configReadable = false)
     }
 

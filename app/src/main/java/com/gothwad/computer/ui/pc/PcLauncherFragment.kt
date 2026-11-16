@@ -1472,7 +1472,7 @@ class PcLauncherFragment : Fragment() {
                 launch {
                     configStore.flow.catch { error ->
                         if (error is CancellationException) throw error
-                        (activity as? com.gothwad.computer.MainActivity)?.onConfigurationUnavailable()
+                        (activity as? com.gothwad.computer.MainActivity)?.onConfigurationUnavailable(error)
                     }.collectLatest { config ->
                         val prevConfig = currentConfig
                         currentConfig = config
