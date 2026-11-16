@@ -16,15 +16,23 @@ inspect_home() {
   adb shell input keyevent KEYCODE_WAKEUP || true
   adb shell wm dismiss-keyguard || true
   adb shell am start -W -n com.gothwad.computer/.MainActivity
-  for attempt in $(seq 1 8); do
+  capture_screen() {
     adb shell rm -f /data/local/tmp/gothwad-window.xml
     timeout 20s adb shell uiautomator dump /data/local/tmp/gothwad-window.xml > "release-dump-${label}.log" 2>&1 || true
     adb exec-out cat /data/local/tmp/gothwad-window.xml > "release-ui-${label}.xml" 2>/dev/null || true
-    if grep -q 'com.gothwad.computer:id/safe_retry' "release-ui-${label}.xml"; then
+    # Android 10 uiautomator may never become idle; dumpsys can inspect a live view tree.
+    if ! grep -q '<hierarchy' "release-ui-${label}.xml"; then
+      adb shell dumpsys activity top > "release-top-${label}.log" 2>&1 || true
+      cat "release-top-${label}.log" > "release-ui-${label}.xml"
+    fi
+  }
+  for attempt in $(seq 1 8); do
+    capture_screen
+    if grep -q 'id/safe_retry' "release-ui-${label}.xml"; then
       echo "::${level}::${label}: Recovery appeared instead of the normal desktop."
       break
     fi
-    if grep -q 'com.gothwad.computer:id/btn_start' "release-ui-${label}.xml"; then
+    if grep -q 'id/btn_start' "release-ui-${label}.xml"; then
       ready=1
       break
     fi
@@ -33,10 +41,8 @@ inspect_home() {
   if [ "$ready" -eq 1 ]; then
     # A frame appearing once is not proof that startup remains healthy.
     sleep 8
-    adb shell rm -f /data/local/tmp/gothwad-window.xml
-    timeout 20s adb shell uiautomator dump /data/local/tmp/gothwad-window.xml > "release-dump-${label}.log" 2>&1 || true
-    adb exec-out cat /data/local/tmp/gothwad-window.xml > "release-ui-${label}.xml" 2>/dev/null || true
-    if ! grep -q 'com.gothwad.computer:id/btn_start' "release-ui-${label}.xml" || grep -q 'com.gothwad.computer:id/safe_retry' "release-ui-${label}.xml"; then
+    capture_screen
+    if ! grep -q 'id/btn_start' "release-ui-${label}.xml" || grep -q 'id/safe_retry' "release-ui-${label}.xml"; then
       ready=0
     fi
   fi
@@ -51,7 +57,9 @@ text = Path(f'release-logcat-{label}.log').read_text(errors='replace').splitline
 selected = [line for line in text if any(x in line for x in ('FATAL EXCEPTION', 'Desktop startup failed', 'MainActivity', 'GothwadApplication', 'Caused by:', 'com.gothwad.computer'))]
 message = '\n'.join(selected[-60:])[:10000].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
 print(f'::{level}::{label} did not reach a stable desktop. {message}')
-print(f'::{level}::UI hierarchy: ' + Path(f'release-ui-{label}.xml').read_text(errors='replace')[:4000].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+ui = Path(f'release-ui-{label}.xml').read_text(errors='replace')
+interesting = '\n'.join(line for line in ui.splitlines() if any(item in line for item in ('View Hierarchy', 'btn_start', 'safe_retry', 'MainActivity')))[:4000] or ui[:4000]
+print(f'::{level}::UI hierarchy: ' + interesting.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
 print(f'::{level}::UI dump command: ' + Path(f'release-dump-{label}.log').read_text(errors='replace')[:2000].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
 PY
     return 1

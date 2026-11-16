@@ -62,4 +62,5 @@ jobs:
             release-ui-*.xml
             release-logcat-*.log
             release-dump-*.log
+            release-top-*.log
           if-no-files-found: ignore
