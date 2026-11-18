@@ -313,11 +313,11 @@ class PcSettingsSystemPage(
             root = b.cardSysAbout,
             iconRes = R.drawable.ic_win_system,
             title = "Windows Specifications",
-            subtitle = "bansify 11 Pro • Version 24H2 (OS Build 26100.1742)",
+            subtitle = "bansify computer 11 Pro • Version 24H2 (OS Build 26100.1742)",
             value = "Details"
         ) {
             val specs = """
-                Edition: bansify 11 Pro
+                Edition: bansify computer 11 Pro
                 Version: 24H2
                 OS Build: 26100.1742
                 Experience: Windows Feature Experience Pack 1000.26100.32.0
@@ -331,7 +331,7 @@ class PcSettingsSystemPage(
 
             PcSettingCardHelper.showInfoDialog(
                 context = context,
-                title = "About bansify",
+                title = "About bansify computer",
                 message = specs
             )
         }
