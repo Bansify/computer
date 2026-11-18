@@ -399,7 +399,7 @@ class PcSettingsOtherTabs(
             iconRes = R.drawable.ic_win_system,
             title = "Default Home app",
             subtitle = if (com.gothwad.computer.data.HomeSettings.isDefaultHome(context))
-                "bansify computer is the current Home. You can switch back to another launcher."
+                "Bansify Computer is the current Home. You can switch back to another launcher."
             else "Choose a Home app in Android settings; keep another launcher installed.",
             value = "Open"
         ) {
@@ -938,11 +938,11 @@ class PcSettingsOtherTabs(
             context = context,
             iconRes = R.drawable.ic_win_system,
             title = "Windows Specifications",
-            subtitle = "bansify computer 11 Pro • Version 24H2",
+            subtitle = "Bansify Computer 11 Pro • Version 24H2",
             value = "View"
         ) {
             val specs = """
-                Edition: bansify computer 11 Pro
+                Edition: Bansify Computer 11 Pro
                 Version: 24H2
                 OS Build: 26100.1742
                 Experience: Windows Feature Experience Pack 1000.26100.32.0
@@ -975,7 +975,7 @@ class PcSettingsOtherTabs(
                 • Startup apps and custom web app (PWA) manager
                 • Enhanced Lock Screen security and App Lock
             """.trimIndent()
-            PcSettingCardHelper.showInfoDialog(context, "bansify computer 1.0.4 Changelog", changelog)
+            PcSettingCardHelper.showInfoDialog(context, "Bansify Computer 1.0.4 Changelog", changelog)
         }
 
         // Restart PC Emulator
