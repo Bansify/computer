@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Gothwad Computer</string>
-    <string name="safe_home_title">Gothwad Computer: recovery</string>
+    <string name="app_name">bansify</string>
+    <string name="safe_home_title">bansify: recovery</string>
     <string name="safe_home_loading">Loading launcher settings…</string>
     <string name="safe_home_message">The desktop had repeated startup errors. Your settings have not been erased. You can retry, open Android settings, or choose another Home app.</string>
     <string name="safe_home_config_error">Your launcher settings could not be read, so app access is unavailable here to avoid bypassing a saved lock. No settings were erased. You can open Android settings or choose another Home app.</string>
@@ -178,22 +178,22 @@
     <string name="rerun_wizard_sub">Default-launcher setup and first-run tips</string>
 
     <!-- Setup wizard -->
-    <string name="wizard_welcome_title">Welcome to Gothwad Computer</string>
+    <string name="wizard_welcome_title">Welcome to bansify</string>
     <string name="wizard_welcome_body">A lightweight, one-screen launcher: your apps grouped by section, your own wallpaper, and a clean status row with clock, network and VPN.</string>
-    <string name="wizard_privacy_body">Privacy note — nothing to grant: Gothwad Computer requests no location, no microphone, and runs no background services. Everything it needs was granted at install.</string>
+    <string name="wizard_privacy_body">Privacy note — nothing to grant: bansify requests no location, no microphone, and runs no background services. Everything it needs was granted at install.</string>
     <string name="wizard_home_title">Set as your home screen</string>
-    <string name="wizard_already_default">✓ Done — Gothwad Computer is already your default launcher on this device.</string>
+    <string name="wizard_already_default">✓ Done — bansify is already your default launcher on this device.</string>
     <string name="wizard_gtv_intro">This is a certified Google TV device. Google does not allow changing the home app from the on-screen settings, so pick one of these two methods:</string>
     <string name="wizard_gtv_adb">1 — ADB (recommended, one-time):\n• Settings &gt; System &gt; About &gt; click "Android TV OS build" 7 times to unlock Developer options\n• Settings &gt; System &gt; Developer options &gt; enable USB/Wireless debugging\n• From a computer on the same network, run:</string>
-    <string name="wizard_gtv_overlay">If the system launcher still overlays Gothwad Computer after that (seen on Hisense and others), find it and disable it — reversible with "pm enable" anytime:</string>
-    <string name="wizard_gtv_which">(Use whichever of the two launcher packages the first command reports. Only disable it AFTER confirming Gothwad Computer opens fine.)</string>
-    <string name="wizard_gtv_remap">2 — Button remap (no computer): install a button-remapper app (e.g. "Button Mapper" from the Play Store) and map the Home button to Gothwad Computer.</string>
+    <string name="wizard_gtv_overlay">If the system launcher still overlays bansify after that (seen on Hisense and others), find it and disable it — reversible with "pm enable" anytime:</string>
+    <string name="wizard_gtv_which">(Use whichever of the two launcher packages the first command reports. Only disable it AFTER confirming bansify opens fine.)</string>
+    <string name="wizard_gtv_remap">2 — Button remap (no computer): install a button-remapper app (e.g. "Button Mapper" from the Play Store) and map the Home button to bansify.</string>
     <string name="wizard_try_dialog">Try system dialog anyway</string>
     <string name="wizard_check_again">Check again</string>
     <string name="wizard_skip">Skip for now</string>
-    <string name="wizard_aosp_body">This device allows choosing a home app. Press the button below, pick Gothwad Computer in the system dialog and confirm (choose "Always" if asked).</string>
+    <string name="wizard_aosp_body">This device allows choosing a home app. Press the button below, pick bansify in the system dialog and confirm (choose "Always" if asked).</string>
     <string name="wizard_set_default">Set as default launcher</string>
-    <string name="wizard_no_dialog_hint">If no dialog appears: Android settings &gt; Apps &gt; Default apps &gt; Home app &gt; Gothwad Computer. Or simply press the Home button — Android will ask which launcher to use.</string>
+    <string name="wizard_no_dialog_hint">If no dialog appears: Android settings &gt; Apps &gt; Default apps &gt; Home app &gt; bansify. Or simply press the Home button — Android will ask which launcher to use.</string>
     <string name="wizard_vpn_title">VPN button</string>
     <string name="wizard_vpn_body">If you use a VPN app, pick it — the VPN button in the status bar will open it. Skip and the VPN button stays hidden (you can enable it later in Settings › Status bar).</string>
     <string name="wizard_vpn_none">No VPN app detected on this device.</string>
@@ -201,7 +201,7 @@
     <string name="wizard_done_title">You\'re all set</string>
     <string name="wizard_tips">Tips:\n• Hold OK on any app for options — move, hide, app info, force stop, uninstall\n• Press Up from the top row to reach VPN, network, clock and settings\n• The gear opens launcher settings: wallpaper, sections, display and more</string>
     <string name="wizard_rerun_note">You can rerun this wizard anytime from Settings &gt; About.</string>
-    <string name="wizard_start">Start using Gothwad Computer</string>
+    <string name="wizard_start">Start using bansify</string>
     <string name="wizard_no_chooser">This device has no home chooser — use the ADB method shown</string>
     <string name="cat_all_apps">All apps</string>
     <string name="all_apps_sub">Every installed app, filled automatically</string>
@@ -211,7 +211,7 @@
 
     <!-- Notifications & Shade -->
     <string name="cd_notifications">Notifications</string>
-    <string name="notification_service_label">Gothwad Computer Notifications</string>
+    <string name="notification_service_label">bansify Notifications</string>
     <string name="notifications_title">Notifications</string>
     <string name="notifications_empty_title">No Notifications</string>
     <string name="notifications_empty_sub">App alerts, media events, and messages will appear here.</string>
@@ -219,7 +219,7 @@
     <string name="notifications_dismiss">Dismiss</string>
     <string name="notifications_open">Open</string>
     <string name="notifications_permission_title">Notification Access Required</string>
-    <string name="notifications_permission_sub">Enable Notification Access for Gothwad Computer to display alerts right on your desktop taskbar.</string>
+    <string name="notifications_permission_sub">Enable Notification Access for bansify to display alerts right on your desktop taskbar.</string>
     <string name="notifications_enable_btn">Grant Notification Access</string>
     <string name="item_notifications">Notifications</string>
     <string name="item_notifications_sub">Notification listener and alerts drawer</string>
@@ -269,7 +269,7 @@
     <string name="item_security_sub">Device lock, App lock &amp; Hide apps</string>
     <string name="security_title">Password &amp; Security</string>
     <string name="device_lock_title">Device Lock</string>
-    <string name="device_lock_sub">Require PIN when Gothwad Computer opens</string>
+    <string name="device_lock_sub">Require PIN when bansify opens</string>
     <string name="app_lock_title">App Lock</string>
     <string name="app_lock_sub">Lock individual apps with a secure PIN</string>
     <string name="hide_apps_title">Hide Apps</string>
@@ -292,6 +292,6 @@
     <string name="secret_code_hint">Type this code in Search bar to reveal hidden apps</string>
     <string name="unlock_to_continue">Enter PIN to access</string>
     <string name="device_locked_title">Desktop is Locked</string>
-    <string name="device_locked_desc">Enter PIN to unlock Gothwad Computer</string>
+    <string name="device_locked_desc">Enter PIN to unlock bansify</string>
     <string name="app_locked_title">App is Locked</string>
 </resources>
