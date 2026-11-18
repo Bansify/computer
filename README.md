@@ -1,6 +1,6 @@
-# Gothwad Computer
+# Bansify Computer
 
-Gothwad Computer is a Kotlin Android application that presents a desktop-style environment with an app grid, taskbar, floating built-in windows, file manager, browser and web-app shortcuts. It runs on Android devices (including devices without a touchscreen); it is not a Windows emulator and does not run Windows executables.
+Bansify Computer is a Kotlin Android application that presents a desktop-style environment with an app grid, taskbar, floating built-in windows, file manager, browser and web-app shortcuts. It runs on Android devices (including devices without a touchscreen); it is not a Windows emulator and does not run Windows executables.
 
 > **Current state:** The manifest registers a Home candidate; the user must choose it in Android settings. Initial recovery support is not yet verified on real TVs or tablets: keep another launcher installed and do not rely on this as your only Home. Some settings and legacy TV-related configuration are incomplete. See the [analysis](docs/PROJECT_ANALYSIS.md) and [Phase 1](docs/PHASE1_TESTING.md) / [Phase 2](docs/PHASE2_TESTING.md) test protocols.
 
@@ -8,7 +8,7 @@ Gothwad Computer is a Kotlin Android application that presents a desktop-style e
 
 - Desktop grid, start menu, taskbar, app search, notifications and settings.
 - Launch installed Android apps; hide, pin and arrange desktop entries.
-- In-app floating windows for File Manager, Web Browser and Gothwad Store.
+- In-app floating windows for File Manager, Web Browser and Bansify Store.
 - Browser-based shortcuts (`pwa://` entries), not separately installed Android packages.
 - Optional launcher-level app/device locks, overlay taskbar, custom wallpaper and display settings. These are **not substitutes for Android system security**.
 - Limited, opt-in per-device shortcuts for Start, Search and Quick Settings under System settings. They work only on the Home desktop; Android may reserve or withhold keys.
