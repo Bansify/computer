@@ -14,13 +14,13 @@ else
 fi
 
 inspect_home() {
-  local package=$1 label=$2 level=$3 ready=0 attempt
+  local package=$1 label=$2 level=$3 app_id=$4 ready=0 attempt
   adb install "$package" || { echo "::${level}::${label}: APK installation failed"; return 1; }
-  adb shell am force-stop com.gothwad.computer || { echo "::${level}::${label}: force-stop failed"; return 1; }
+  adb shell am force-stop "$app_id" || { echo "::${level}::${label}: force-stop failed"; return 1; }
   adb logcat -c
   adb shell input keyevent KEYCODE_WAKEUP || true
   adb shell wm dismiss-keyguard || true
-  adb shell am start -W -n com.gothwad.computer/.MainActivity
+  adb shell am start -W -n "$app_id/.MainActivity"
   capture_screen() {
     adb shell rm -f /data/local/tmp/gothwad-window.xml
     timeout 20s adb shell uiautomator dump /data/local/tmp/gothwad-window.xml > "release-dump-${label}.log" 2>&1 || true
@@ -52,14 +52,14 @@ inspect_home() {
     fi
   fi
   adb logcat -d -v brief > "release-logcat-${label}.log"
-  adb uninstall com.gothwad.computer >/dev/null || { echo "::error::Could not clean up emulator installation"; exit 1; }
+  adb uninstall "$app_id" >/dev/null || { echo "::error::Could not clean up emulator installation"; exit 1; }
   if [ "$ready" -ne 1 ]; then
-    LEVEL="$level" LABEL="$label" python3 - <<'PY'
+    LEVEL="$level" LABEL="$label" APP_ID="$app_id" python3 - <<'PY'
 import os
 from pathlib import Path
 label, level = os.environ['LABEL'], os.environ['LEVEL']
 text = Path(f'release-logcat-{label}.log').read_text(errors='replace').splitlines()
-selected = [line for line in text if any(x in line for x in ('FATAL EXCEPTION', 'Desktop startup failed', 'MainActivity', 'GothwadApplication', 'Caused by:', 'com.gothwad.computer'))]
+selected = [line for line in text if any(x in line for x in ('FATAL EXCEPTION', 'Desktop startup failed', 'MainActivity', 'GothwadApplication', 'Caused by:', os.environ['APP_ID']))]
 message = '\n'.join(selected[-60:])[:10000].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
 print(f'::{level}::{label} did not reach a stable desktop. {message}')
 ui = Path(f'release-ui-{label}.xml').read_text(errors='replace')
@@ -74,8 +74,8 @@ PY
 
 # A known old failure is reported as a warning but must not conceal a new failure.
 if [ "$old_available" -eq 1 ]; then
-  if ! inspect_home old-release/GothwadComputer-v1.0.21-Release.apk published warning; then
+  if ! inspect_home old-release/GothwadComputer-v1.0.21-Release.apk published warning com.gothwad.computer; then
     echo 'Published v1.0.21 did not pass this emulator smoke test.'
   fi
 fi
-inspect_home "$apk" candidate error
+inspect_home "$apk" candidate error com.bansify.computer

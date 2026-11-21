@@ -1,10 +1,10 @@
-# Gothwad Computer — project analysis & developer guide
+# Bansify Computer — project analysis & developer guide
 
 **Review scope:** baseline repository source and configuration, reviewed 2026-11-15. Phase 1 work has since begun: HOME registration, initial recovery and build-only CI are being added; consult [Phase 1 testing](PHASE1_TESTING.md) and the current code for their status. Yeh static code analysis hai, device par runtime/security audit nahi. Feature claims below refer to the checked-in implementation, not guarantees on every Android version or device. Findings are observations and recommendations; no application behavior was changed during this documentation work.
 
 ## 1. Project kya karta hai?
 
-Gothwad Computer Android ke andar desktop-like interface deta hai: installed Android apps ka grid/start menu, taskbar, aur app ke andar managed floating windows. Built-in file manager, WebView browser aur HTML/JS based store available hain. Store “install” actually browser shortcut banata hai, Android APK install nahi. Yeh Windows, PC hardware ya Windows applications ka emulator nahi hai.
+Bansify Computer Android ke andar desktop-like interface deta hai: installed Android apps ka grid/start menu, taskbar, aur app ke andar managed floating windows. Built-in file manager, WebView browser aur HTML/JS based store available hain. Store “install” actually browser shortcut banata hai, Android APK install nahi. Yeh Windows, PC hardware ya Windows applications ka emulator nahi hai.
 
 **Important distinction:** Android TV/remote-related code aur legacy TV configuration present hain, lekin [`nav_graph.xml`](../app/src/main/res/navigation/nav_graph.xml) ka ek hi destination `PcLauncherFragment` hai. Manifest mein `LAUNCHER`, `LEANBACK_LAUNCHER` aur ab `HOME` / `DEFAULT` filter hain; actual default Home selection aur device behavior ka verification pending hai. Separate TV UI ka claim current navigation se establish nahi hota. Purane README ke Compose, Media3 video wallpaper, weather aur Apache license claims bhi current build/files se supported nahi the.
 
@@ -13,7 +13,7 @@ Gothwad Computer Android ke andar desktop-like interface deta hai: installed And
 ```text
 app/src/main/
   AndroidManifest.xml             components, permissions, intent filters
-  java/com/gothwad/computer/
+  java/com/bansify/computer/
     GothwadApplication.kt         DPI setup, crash logging, process unlock flag
     MainActivity.kt               entry activity, config, lock, intent actions
     Actions.kt                    Android app launch and system-settings actions
@@ -63,16 +63,16 @@ FloatingTaskbarService -> system overlay (when allowed) -> MainActivity actions
 
 ### App discovery and launch
 
-[`AppRepository.kt`](../app/src/main/java/com/gothwad/computer/data/AppRepository.kt) queries both leanback and ordinary launcher activities, deduplicates by package (leanback preferred), excludes this app, assigns categories and sorts labels. It rasterizes icons/banners into `cacheDir/app_art` WebP files keyed by package and update timestamp, and also keeps an in-memory list. Package changes cause rescans. `Actions.launchApp()` prefers a leanback launch intent, then the regular launch intent; external apps run as their own Android activities, not inside the built-in floating windows.
+[`AppRepository.kt`](../app/src/main/java/com/bansify/computer/data/AppRepository.kt) queries both leanback and ordinary launcher activities, deduplicates by package (leanback preferred), excludes this app, assigns categories and sorts labels. It rasterizes icons/banners into `cacheDir/app_art` WebP files keyed by package and update timestamp, and also keeps an in-memory list. Package changes cause rescans. `Actions.launchApp()` prefers a leanback launch intent, then the regular launch intent; external apps run as their own Android activities, not inside the built-in floating windows.
 
 `PcLauncherFragment` adds synthetic entries for File Manager, Web Browser and Store, and `pwa://<URL>` entries from config. Built-in entries are intercepted and opened in `FloatingWindowManager`. Normal app launch from the desktop checks the configured launcher app lock first; see security limitations below.
 
 ### Windows, file manager, browser and store
 
-- [`FloatingWindowManager.kt`](../app/src/main/java/com/gothwad/computer/apps/floating/FloatingWindowManager.kt) manages app-owned Views inside the desktop: drag, minimize, maximize, restore, z-order and close. These are not arbitrary Android apps running in OS-level freeform windows.
-- [`FileManagerView.kt`](../app/src/main/java/com/gothwad/computer/apps/files/FileManagerView.kt) lists, filters, sorts, navigates and performs file operations; sharing/opening uses `FileProvider`. Actual access is constrained by Android scoped storage and device permissions, especially on newer Android versions. The manifest's provider roots include external storage, app internal files and cache; granted URI access should be limited to the intended recipient.
-- [`WebAppView.kt`](../app/src/main/java/com/gothwad/computer/apps/webapp/WebAppView.kt) creates WebView tabs, browser controls, bookmarks/history/downloads, and URL shortcuts. Web app shortcuts still load in this app's WebView. Downloads use Android `DownloadManager`. Web content and favicons require network access.
-- [`GothwadStoreView.kt`](../app/src/main/java/com/gothwad/computer/apps/store/GothwadStoreView.kt) loads bundled `assets/store/index.html`; its JavaScript interface invokes `WebAppManager` to add/remove/open shortcuts. [`WebAppManager.kt`](../app/src/main/java/com/gothwad/computer/apps/webapp/WebAppManager.kt) normalizes URLs, fetches metadata/icons, saves PNGs and updates config. `pwa://` is a local identity convention, not an Android package or proof of standards-compliant PWA installation/offline support.
+- [`FloatingWindowManager.kt`](../app/src/main/java/com/bansify/computer/apps/floating/FloatingWindowManager.kt) manages app-owned Views inside the desktop: drag, minimize, maximize, restore, z-order and close. These are not arbitrary Android apps running in OS-level freeform windows.
+- [`FileManagerView.kt`](../app/src/main/java/com/bansify/computer/apps/files/FileManagerView.kt) lists, filters, sorts, navigates and performs file operations; sharing/opening uses `FileProvider`. Actual access is constrained by Android scoped storage and device permissions, especially on newer Android versions. The manifest's provider roots include external storage, app internal files and cache; granted URI access should be limited to the intended recipient.
+- [`WebAppView.kt`](../app/src/main/java/com/bansify/computer/apps/webapp/WebAppView.kt) creates WebView tabs, browser controls, bookmarks/history/downloads, and URL shortcuts. Web app shortcuts still load in this app's WebView. Downloads use Android `DownloadManager`. Web content and favicons require network access.
+- [`GothwadStoreView.kt`](../app/src/main/java/com/bansify/computer/apps/store/GothwadStoreView.kt) loads bundled `assets/store/index.html`; its JavaScript interface invokes `WebAppManager` to add/remove/open shortcuts. [`WebAppManager.kt`](../app/src/main/java/com/bansify/computer/apps/webapp/WebAppManager.kt) normalizes URLs, fetches metadata/icons, saves PNGs and updates config. `pwa://` is a local identity convention, not an Android package or proof of standards-compliant PWA installation/offline support.
 
 ### System integrations
 
@@ -117,7 +117,7 @@ Priorities below are suggested engineering priorities, not verified exploit seve
 
 ### P0 — don't market current locks/private browsing as security boundaries
 
-1. **Plaintext credentials and backup exposure.** `LockCredential.value` in [`Config.kt`](../app/src/main/java/com/gothwad/computer/data/Config.kt) is serialized into DataStore; backup is enabled. A launcher PIN is not a system lock and does not protect against all routes to other apps. Move to a salted, slow password verifier, review backup exclusions and provide a migration/reset strategy. Prefer Android system credentials for device protection; never log secrets.
+1. **Plaintext credentials and backup exposure.** `LockCredential.value` in [`Config.kt`](../app/src/main/java/com/bansify/computer/data/Config.kt) is serialized into DataStore; backup is enabled. A launcher PIN is not a system lock and does not protect against all routes to other apps. Move to a salted, slow password verifier, review backup exclusions and provide a migration/reset strategy. Prefer Android system credentials for device protection; never log secrets.
 2. **Launcher lock enforcement needs further review.** Home desktop/pinned/start/search routes, built-in entries and Settings app launches now apply a shared launcher-level policy; incomplete credentials fail closed. External intents, notifications, overlays and changes while a dialog is open need adversarial/device testing. These locks cannot prevent launching an Android app outside this launcher.
 3. **Private browsing is unavailable.** The misleading incognito action no longer creates tabs. Normal WebView tabs share cookies and storage; clearing data is not isolated private browsing.
 

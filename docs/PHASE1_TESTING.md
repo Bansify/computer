@@ -22,8 +22,8 @@ Record commit/build, build variant/signature, date, device model/OEM, Android ve
 - On a **disposable debug installation only**, the debug source set provides a startup-crash intent. Ensure the stock launcher is installed and selected first; force-stop before each attempt so `onCreate` is called. Example with an attached ADB device:
 
   ```bash
-  adb shell am force-stop com.gothwad.computer
-  adb shell am start -n com.gothwad.computer/.MainActivity -a com.gothwad.computer.DEBUG_CRASH_STARTUP
+  adb shell am force-stop com.bansify.computer
+  adb shell am start -n com.bansify.computer/.MainActivity -a com.bansify.computer.DEBUG_CRASH_STARTUP
   # Repeat force-stop + start once, then launch normally from the app list.
   ```
 

@@ -96,8 +96,8 @@ jobs:
           }
 
           if [ -n "$DEBUG_APK" ]; then
-            cp "$DEBUG_APK" "release_out/GothwadComputer-v${V_NAME}-Debug.apk"
-            echo "Copied Debug APK: release_out/GothwadComputer-v${V_NAME}-Debug.apk"
+            cp "$DEBUG_APK" "release_out/BansifyComputer-v${V_NAME}-Debug.apk"
+            echo "Copied Debug APK: release_out/BansifyComputer-v${V_NAME}-Debug.apk"
           fi
 
           if [ -z "$KEYSTORE_BASE64" ]; then
@@ -147,21 +147,21 @@ jobs:
               --ks-key-alias "$ACTUAL_ALIAS" \
               --ks-pass "pass:$KEYSTORE_PASS" \
               --key-pass "pass:$KEY_PASS" \
-              --out "release_out/GothwadComputer-v${V_NAME}-Release.apk" \
+              --out "release_out/BansifyComputer-v${V_NAME}-Release.apk" \
               "$UNALIGNED_TEMP"
 
-            "$APKSIGNER" verify --verbose "release_out/GothwadComputer-v${V_NAME}-Release.apk"
+            "$APKSIGNER" verify --verbose "release_out/BansifyComputer-v${V_NAME}-Release.apk"
             rm -f "$UNALIGNED_TEMP"
           fi
 
           if [ -n "$AAB" ]; then
-            cp "$AAB" "release_out/GothwadComputer-v${V_NAME}-PlayStore.aab"
+            cp "$AAB" "release_out/BansifyComputer-v${V_NAME}-PlayStore.aab"
             jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
               -keystore "$KS_PATH" \
               -storepass "$KEYSTORE_PASS" -keypass "$KEY_PASS" \
-              "release_out/GothwadComputer-v${V_NAME}-PlayStore.aab" \
+              "release_out/BansifyComputer-v${V_NAME}-PlayStore.aab" \
               "$ACTUAL_ALIAS"
-            jarsigner -verify "release_out/GothwadComputer-v${V_NAME}-PlayStore.aab"
+            jarsigner -verify "release_out/BansifyComputer-v${V_NAME}-PlayStore.aab"
             echo "Successfully signed Play Store AAB!"
           fi
 
@@ -174,12 +174,12 @@ jobs:
           V_NAME: ${{ steps.versioning.outputs.v_name }}
           V_CODE: ${{ steps.versioning.outputs.v_code }}
         run: |
-          bash .github/scripts/check-release-apk.sh "release_out/GothwadComputer-v${V_NAME}-Release.apk" "$V_CODE" .github/release-signing-sha256.txt
+          bash .github/scripts/check-release-apk.sh "release_out/BansifyComputer-v${V_NAME}-Release.apk" "$V_CODE" .github/release-signing-sha256.txt
 
       - name: Upload Release Artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: Gothwad-Computer-v${{ steps.versioning.outputs.v_name }}-Release
+          name: Bansify-Computer-v${{ steps.versioning.outputs.v_name }}-Release
           path: release_out/
 
       - name: Upload release crash symbol mapping
@@ -202,8 +202,8 @@ jobs:
           prerelease: false
           generate_release_notes: true
           body: |
-            **Signing key change:** This release uses a different signing key from v1.0.20. Android may reject an in-place update from v1.0.20; uninstalling the old app can delete its local data. Back up data first and verify recovery on a test device. Keep an alternate launcher installed.
+            **New application ID:** Bansify Computer uses `com.bansify.computer`, which Android installs separately from the former `com.gothwad.computer` app. Settings and app data do not automatically transfer. Keep the old app and an alternate Home installed, back up data before any removal, and select the desired default Home in Android settings. The prior v1.0.20 release also used a different signing key.
           files: |
-            release_out/GothwadComputer-v${{ steps.versioning.outputs.v_name }}-Release.apk
-            release_out/GothwadComputer-v${{ steps.versioning.outputs.v_name }}-Debug.apk
-            release_out/GothwadComputer-v${{ steps.versioning.outputs.v_name }}-PlayStore.aab
+            release_out/BansifyComputer-v${{ steps.versioning.outputs.v_name }}-Release.apk
+            release_out/BansifyComputer-v${{ steps.versioning.outputs.v_name }}-Debug.apk
+            release_out/BansifyComputer-v${{ steps.versioning.outputs.v_name }}-PlayStore.aab

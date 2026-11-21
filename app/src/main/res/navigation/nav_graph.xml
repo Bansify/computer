@@ -7,7 +7,7 @@
 
     <fragment
         android:id="@+id/pcLauncherFragment"
-        android:name="com.gothwad.computer.ui.pc.PcLauncherFragment"
+        android:name="com.bansify.computer.ui.pc.PcLauncherFragment"
         android:label="PcLauncherFragment"
         tools:layout="@layout/fragment_pc_launcher" />
 
