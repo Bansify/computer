@@ -1,8 +1,8 @@
-# Gothwad Computer — 5-Phase Home Launcher Master Plan
+# Bansify Computer — 5-Phase Home Launcher Master Plan
 
 **Status:** Phase 1 and 2 implementation and hardening underway; acceptance gates remain open. All checkboxes remain pending until the corresponding automated and real-device evidence is recorded.
 **Product goal:** Android TV-first, desktop-style Android HOME launcher for TVs and tablets; fully usable with remote/D-pad, touch, physical keyboard and mouse. Built-in apps remain Android Views/WebView features, not Windows executable emulation.
-**Source baseline:** `com.gothwad.computer`, min SDK 21, target/compile SDK 34, Kotlin + XML/ViewBinding. Confirm current files before implementation; this plan is not proof a feature is implemented or tested.
+**Source baseline:** `com.bansify.computer`, min SDK 21, target/compile SDK 34, Kotlin + XML/ViewBinding. Confirm current files before implementation; this plan is not proof a feature is implemented or tested.
 **Priority:** Prevent user lockout and preserve a recoverable Home first; remote-only usability second; feature breadth and polish after that.
 
 > This is the **canonical plan**, superseding old task instructions. [`task-lock-system.md`](docs/task-lock-system.md) is historical, not an implementation specification. In particular, do not follow its claims of unbypassable accessibility locks or its instruction to discard old credentials. Never assume a launcher or accessibility service can control all Android/OEM behavior.

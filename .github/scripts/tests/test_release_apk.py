@@ -16,7 +16,7 @@ class ReleaseApkTest(unittest.TestCase):
         tools = root / 'sdk' / 'build-tools' / '35.0.0'
         tools.mkdir(parents=True)
         for name, body in {
-            'aapt': 'printf "%s\\n" "$FAKE_BADGING"',
+            'aapt': 'printf "%s\\n" "$FAKE_BADGING" "$FAKE_LABEL"',
             'apksigner': 'printf "%s\\n" "$FAKE_CERT"; exit "${FAKE_VERIFY_EXIT:-0}"',
         }.items():
             tool = tools / name
@@ -27,7 +27,8 @@ class ReleaseApkTest(unittest.TestCase):
         self.pin = root / 'pin.txt'
         self.pin.write_text(PIN + '\n')
         self.env = dict(os.environ, ANDROID_HOME=str(root / 'sdk'),
-                        FAKE_BADGING="package: name='com.gothwad.computer' versionCode='21' versionName='1.0.21'",
+                        FAKE_BADGING="package: name='com.bansify.computer' versionCode='21' versionName='1.0.21'",
+                        FAKE_LABEL="application-label:'Bansify Computer'",
                         FAKE_CERT=f'V3.0 Signer: certificate SHA-256 digest: {PIN}')
 
     def run_check(self, **updates):
@@ -47,7 +48,8 @@ class ReleaseApkTest(unittest.TestCase):
 
     def test_rejects_wrong_package_version_and_pin(self):
         self.assertNotEqual(self.run_check(FAKE_BADGING="package: name='other' versionCode='21'").returncode, 0)
-        self.assertNotEqual(self.run_check(FAKE_BADGING="package: name='com.gothwad.computer' versionCode='20'").returncode, 0)
+        self.assertNotEqual(self.run_check(FAKE_BADGING="package: name='com.bansify.computer' versionCode='20'").returncode, 0)
+        self.assertNotEqual(self.run_check(FAKE_LABEL="application-label:'Wrong Name'").returncode, 0)
         self.pin.write_text('invalid\n')
         self.assertNotEqual(self.run_check().returncode, 0)
 

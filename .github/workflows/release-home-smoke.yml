@@ -1,0 +1,66 @@
+name: Minified release Home smoke test
+
+on:
+  push:
+    branches: ['arena/**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Release Home ${{ matrix.target }} Android ${{ matrix.api }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { api: 21, target: google_apis, arch: x86_64 }
+          - { api: 29, target: google_apis, arch: x86_64 }
+          - { api: 34, target: google_apis, arch: x86_64 }
+          - { api: 29, target: android-tv, arch: x86 }
+          - { api: 34, target: android-tv, arch: x86 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/wrapper-validation@v6
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Enable KVM when available
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+      - name: Build, install and launch minified release (local debug key)
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
+          arch: ${{ matrix.arch }}
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash .github/scripts/release-home-smoke.sh
+      - name: Upload emulator diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-home-${{ matrix.target }}-${{ matrix.api }}-diagnostics
+          path: |
+            release-ui-*.xml
+            release-logcat-*.log
+            release-dump-*.log
+            release-top-*.log
+          if-no-files-found: ignore

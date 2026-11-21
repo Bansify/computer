@@ -66,6 +66,7 @@ jobs:
           path: |
             app/build/reports/
             app/build/outputs/lint-results-*.xml
+            app/build/outputs/mapping/release/mapping.txt
           if-no-files-found: ignore
       - name: Upload debug APK
         if: success()

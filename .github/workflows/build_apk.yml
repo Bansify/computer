@@ -28,9 +28,15 @@ jobs:
     permissions:
       contents: read
 
+  release_home:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || inputs.dry_run
+    uses: ./.github/workflows/release-home-smoke.yml
+    permissions:
+      contents: read
+
   build:
     name: Build & Sign APK & AAB
-    needs: validate
+    needs: [validate, release_home]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -106,8 +112,8 @@ jobs:
 
           # 0. Copy Debug APK directly (already signed with debug keystore)
           if [ -n "$DEBUG_APK" ]; then
-            cp "$DEBUG_APK" "output_release/GothwadComputer-v${V_NAME}-Debug.apk"
-            echo "Successfully included Debug APK: output_release/GothwadComputer-v${V_NAME}-Debug.apk"
+            cp "$DEBUG_APK" "output_release/BansifyComputer-v${V_NAME}-Debug.apk"
+            echo "Successfully included Debug APK: output_release/BansifyComputer-v${V_NAME}-Debug.apk"
           fi
 
           if [ -z "$KEYSTORE_BASE64" ]; then
@@ -159,22 +165,22 @@ jobs:
               --ks-key-alias "$ACTUAL_ALIAS" \
               --ks-pass "pass:$KEYSTORE_PASS" \
               --key-pass "pass:$KEY_PASS" \
-              --out "output_release/GothwadComputer-v${V_NAME}-Release.apk" \
+              --out "output_release/BansifyComputer-v${V_NAME}-Release.apk" \
               "$UNALIGNED_TEMP"
               
-            "$APKSIGNER" verify --verbose "output_release/GothwadComputer-v${V_NAME}-Release.apk"
+            "$APKSIGNER" verify --verbose "output_release/BansifyComputer-v${V_NAME}-Release.apk"
             rm -f "$UNALIGNED_TEMP"
           fi
           
           # 2. Sign Play Store AAB Bundle using jarsigner
           if [ -n "$UNSIGNED_AAB" ]; then
-            cp "$UNSIGNED_AAB" "output_release/GothwadComputer-v${V_NAME}-PlayStore.aab"
+            cp "$UNSIGNED_AAB" "output_release/BansifyComputer-v${V_NAME}-PlayStore.aab"
             jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
               -keystore "$KS_PATH" \
               -storepass "$KEYSTORE_PASS" -keypass "$KEY_PASS" \
-              "output_release/GothwadComputer-v${V_NAME}-PlayStore.aab" \
+              "output_release/BansifyComputer-v${V_NAME}-PlayStore.aab" \
               "$ACTUAL_ALIAS"
-            jarsigner -verify "output_release/GothwadComputer-v${V_NAME}-PlayStore.aab"
+            jarsigner -verify "output_release/BansifyComputer-v${V_NAME}-PlayStore.aab"
             echo "Successfully signed Play Store AAB!"
           fi
 
@@ -187,13 +193,20 @@ jobs:
           V_NAME: ${{ steps.versioning.outputs.v_name }}
           V_CODE: ${{ steps.versioning.outputs.v_code }}
         run: |
-          bash .github/scripts/check-release-apk.sh "output_release/GothwadComputer-v${V_NAME}-Release.apk" "$V_CODE" .github/release-signing-sha256.txt
+          bash .github/scripts/check-release-apk.sh "output_release/BansifyComputer-v${V_NAME}-Release.apk" "$V_CODE" .github/release-signing-sha256.txt
 
       - name: Upload Signed Release APK, Debug APK & AAB Artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: Gothwad-Computer-v${{ steps.versioning.outputs.v_name }}-Build${{ steps.versioning.outputs.v_code }}
+          name: Bansify-Computer-v${{ steps.versioning.outputs.v_name }}-Build${{ steps.versioning.outputs.v_code }}
           path: output_release/
+
+      - name: Upload release crash symbol mapping
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-r8-mapping-${{ github.run_id }}
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
 
       - name: Create Automatic GitHub Release
         if: github.event_name != 'workflow_dispatch' || !inputs.dry_run
@@ -209,8 +222,8 @@ jobs:
           prerelease: false
           generate_release_notes: true
           body: |
-            **Signing key change:** This release uses a different signing key from v1.0.20. Android may reject an in-place update from v1.0.20; uninstalling the old app can delete its local data. Back up data first and verify recovery on a test device. Keep an alternate launcher installed.
+            **New application ID:** Bansify Computer uses `com.bansify.computer`, which Android installs separately from the former `com.gothwad.computer` app. Settings and app data do not automatically transfer. Keep the old app and an alternate Home installed, back up data before any removal, and select the desired default Home in Android settings. The prior v1.0.20 release also used a different signing key.
           files: |
-            output_release/GothwadComputer-v${{ steps.versioning.outputs.v_name }}-Release.apk
-            output_release/GothwadComputer-v${{ steps.versioning.outputs.v_name }}-Debug.apk
-            output_release/GothwadComputer-v${{ steps.versioning.outputs.v_name }}-PlayStore.aab
+            output_release/BansifyComputer-v${{ steps.versioning.outputs.v_name }}-Release.apk
+            output_release/BansifyComputer-v${{ steps.versioning.outputs.v_name }}-Debug.apk
+            output_release/BansifyComputer-v${{ steps.versioning.outputs.v_name }}-PlayStore.aab

@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.gothwad.computer"
+    namespace = "com.bansify.computer"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.gothwad.computer"
+        applicationId = "com.bansify.computer"
         minSdk = 21
         targetSdk = 34
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

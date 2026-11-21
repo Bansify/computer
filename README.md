@@ -21,7 +21,7 @@ The UI uses **Android Views, XML, ViewBinding, Fragments and RecyclerView**. Do 
 
 | Item | Current configuration |
 | --- | --- |
-| App ID / namespace | `com.gothwad.computer` |
+| App ID / namespace | `com.bansify.computer` |
 | Minimum / target / compile SDK | 21 / 34 / 34 |
 | Java / Kotlin | JDK 17 / Kotlin 2.0.20 |
 | Android Gradle Plugin / wrapper | 8.5.2 / Gradle 8.7 |
@@ -45,7 +45,7 @@ Debug output: `app/build/outputs/apk/debug/`. Build release artifacts with:
 sh ./gradlew assembleRelease bundleRelease
 ```
 
-**Signing-key change:** the owner reports that v1.0.20 used an incorrect signing key. New releases use the corrected key and may not upgrade over v1.0.20 in place. Uninstalling can erase local app data: back up first, test migration, and keep an alternate Home installed.
+**New application ID:** `com.bansify.computer` is a separate app from the old `com.gothwad.computer` launcher. It will not update the old package or automatically carry over its settings, app data, default-Home selection or permissions. Keep both the old app and an independent alternate Home installed until migration and device testing are complete. Removing the old app can delete its local data. The older v1.0.20 also used a different signing key.
 
 Release builds are unsigned by default. For local testing only, `-PlocalSign` uses a debug signing key; do **not** distribute that as a production release. `app/build.gradle.kts` also supports CI signing with `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`. The GitHub workflows instead build and sign in a separate step using repository secrets; see the [CI section](docs/PROJECT_ANALYSIS.md#build-test-aur-ci).
 

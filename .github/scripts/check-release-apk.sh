@@ -11,9 +11,14 @@ expected=$(tr -d '\r\n' < "$certificate_file")
 aapt=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
 apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
 test -n "$aapt" && test -n "$apksigner" || { echo "Android build tools missing" >&2; exit 1; }
-metadata=$("$aapt" dump badging "$candidate" | sed -n '1p')
-if [[ "$metadata" != *"name='com.gothwad.computer'"* || "$metadata" != *"versionCode='$expected_code'"* ]]; then
+badging=$("$aapt" dump badging "$candidate")
+metadata=$(printf '%s\n' "$badging" | sed -n '1p')
+if [[ "$metadata" != *"name='com.bansify.computer'"* || "$metadata" != *"versionCode='$expected_code'"* ]]; then
   echo "Candidate package or version code is incorrect" >&2
+  exit 1
+fi
+if ! grep -Fxq "application-label:'Bansify Computer'" <<< "$badging"; then
+  echo "Candidate application label is not Bansify Computer" >&2
   exit 1
 fi
 if ! output=$("$apksigner" verify --print-certs "$candidate" 2>&1); then

@@ -52,7 +52,7 @@
                     android:id="@+id/tv_system_pc_name"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Gothwad-PC"
+                    android:text="Bansify-PC"
                     android:textColor="#FFFFFF"
                     android:textSize="16sp"
                     android:textStyle="bold" />
