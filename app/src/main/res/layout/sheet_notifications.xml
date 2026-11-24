@@ -125,7 +125,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="Grant access to display incoming TV notifications and active playback info."
+                    android:text="Grant access to display incoming notifications and active playback info."
                     android:textColor="#99FFFFFF"
                     android:textSize="12sp" />
             </LinearLayout>

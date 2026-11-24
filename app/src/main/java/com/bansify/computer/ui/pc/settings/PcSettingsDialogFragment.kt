@@ -211,7 +211,7 @@ class PcSettingsDialogFragment : DialogFragment() {
         navAdapter.setSelectedId(tabId)
         binding.containerSettingsPage.removeAllViews()
 
-        val inflater = LayoutInflater.from(requireContext())
+        val inflater = layoutInflater
         val pageView: View = when (tabId) {
             PcSettingsConstants.TAB_PERSONALISATION -> personalisationPage?.createView(inflater)
             PcSettingsConstants.TAB_SYSTEM -> systemPage?.createView(inflater)
@@ -231,8 +231,8 @@ class PcSettingsDialogFragment : DialogFragment() {
                         target.outputStream().use { output ->
                             input.copyTo(output)
                         }
-                    }
-                    true
+                        true
+                    } ?: false
                 }.getOrDefault(false)
             }
 

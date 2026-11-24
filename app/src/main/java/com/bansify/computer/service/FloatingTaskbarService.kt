@@ -24,10 +24,12 @@ import com.bansify.computer.databinding.LayoutFloatingTaskbarOverlayBinding
 import com.bansify.computer.databinding.LayoutFloatingTaskbarTriggerBinding
 import com.bansify.computer.ui.AppIcons
 import com.bansify.computer.ui.view.SmoothCornerDrawable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -72,9 +74,16 @@ class FloatingTaskbarService : Service() {
 
         // Observe config
         serviceScope.launch {
-            ConfigStore(applicationContext).flow.collectLatest { config ->
-                handleConfigChange(config)
-            }
+            ConfigStore(applicationContext).flow
+                .catch { error ->
+                    if (error is CancellationException) throw error
+                    hideTrigger()
+                    hideOverlay()
+                    stopSelf()
+                }
+                .collectLatest { config ->
+                    handleConfigChange(config)
+                }
         }
     }
 

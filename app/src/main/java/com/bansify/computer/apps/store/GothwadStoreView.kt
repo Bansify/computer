@@ -78,7 +78,7 @@ class GothwadStoreView(
     private fun localAsset(url: String?): WebResourceResponse {
         val asset = url?.removePrefix(STORE_ORIGIN)?.takeIf { url == STORE_ORIGIN + it }
         val mime = asset?.let { assetTypes[it] }
-        if (mime != null && asset != null) {
+        if (mime != null) {
             val stream = runCatching { context.assets.open("store/$asset") }.getOrNull()
             if (stream != null) return WebResourceResponse(mime, "UTF-8", stream)
         }

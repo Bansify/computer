@@ -270,7 +270,7 @@
                 android:layout_weight="1"
                 android:background="@drawable/bg_dialog_button"
                 android:minHeight="48dp"
-                android:text="Android TV"
+                android:text="Android Settings"
                 android:textColor="#FFFFFF"
                 android:textSize="13sp" />
         </LinearLayout>

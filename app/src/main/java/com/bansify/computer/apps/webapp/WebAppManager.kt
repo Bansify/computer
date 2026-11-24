@@ -80,7 +80,7 @@ object WebAppManager {
                 put(pwaPkg, finalTitle)
             }
             val updatedIcons = cfg.pcCustomIcons.toMutableMap().apply {
-                if (iconPath != null) put(pwaPkg, iconPath!!)
+                iconPath?.let { put(pwaPkg, it) }
             }
             cfg.copy(
                 pcDesktopOrder = updatedOrder,
