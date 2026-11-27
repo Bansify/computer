@@ -115,6 +115,11 @@ class PcSettingsDialogFragment : DialogFragment() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        systemPage?.refreshDefaultLauncherStatus()
+    }
+
     private fun setupWindowControls() {
         binding.btnWinClose.setOnClickListener {
             dismiss()
@@ -153,7 +158,11 @@ class PcSettingsDialogFragment : DialogFragment() {
             scope = viewLifecycleOwner.lifecycleScope,
             config = currentConfig,
             onConfigChanged = { cfg -> onConfigChanged(cfg) },
-            onOpenShortcuts = { ShortcutSettingsDialogFragment.create().show(childFragmentManager, "shortcuts") }
+            onOpenShortcuts = {
+                if (isAdded && !childFragmentManager.isStateSaved && childFragmentManager.findFragmentByTag("shortcuts") == null) {
+                    runCatching { ShortcutSettingsDialogFragment.create().show(childFragmentManager, "shortcuts") }
+                }
+            }
         )
 
         otherTabs = PcSettingsOtherTabs(
@@ -222,12 +231,13 @@ class PcSettingsDialogFragment : DialogFragment() {
     }
 
     private fun handleCustomWallpaperUri(uri: Uri) {
+        if (!isAdded || _binding == null) return
         viewLifecycleOwner.lifecycleScope.launch {
-            val context = requireContext()
+            val ctx = context ?: return@launch
             val copied = withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        val target = File(context.filesDir, "wallpaper_pc.jpg")
+                    ctx.contentResolver.openInputStream(uri)?.use { input ->
+                        val target = File(ctx.filesDir, "wallpaper_pc.jpg")
                         target.outputStream().use { output ->
                             input.copyTo(output)
                         }
@@ -237,29 +247,47 @@ class PcSettingsDialogFragment : DialogFragment() {
             }
 
             if (copied) {
-                val newCfg = currentConfig.copy(pcUseCustomWallpaper = true)
-                ConfigStore(context).update {
-                    it.copy(pcUseCustomWallpaper = true)
+                try {
+                    val newCfg = currentConfig.copy(pcUseCustomWallpaper = true)
+                    ConfigStore(ctx).update {
+                        it.copy(pcUseCustomWallpaper = true)
+                    }
+                    onConfigChanged(newCfg)
+                    Toast.makeText(ctx, "Desktop wallpaper applied", Toast.LENGTH_SHORT).show()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    Toast.makeText(ctx, "Failed to save wallpaper setting", Toast.LENGTH_SHORT).show()
                 }
-                onConfigChanged(newCfg)
-                Toast.makeText(context, "Desktop wallpaper applied", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(context, "Failed to load image", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, "Failed to load image", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private fun openLockSetupDialog() {
-        PinSetupDialogFragment.newInstance(
-            onSaved = { newCred ->
-                viewLifecycleOwner.lifecycleScope.launch {
-                    val newCfg = currentConfig.copy(deviceLock = newCred)
-                    ConfigStore(requireContext()).update { it.copy(deviceLock = newCred) }
-                    onConfigChanged(newCfg)
-                    Toast.makeText(requireContext(), "Lock PIN updated", Toast.LENGTH_SHORT).show()
+        if (!isAdded || parentFragmentManager.isStateSaved) return
+        if (parentFragmentManager.findFragmentByTag(PinSetupDialogFragment.TAG) != null) return
+        runCatching {
+            PinSetupDialogFragment.newInstance(
+                onSaved = { newCred ->
+                    if (!isAdded || _binding == null) return@newInstance
+                    val ctx = context ?: return@newInstance
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        try {
+                            val newCfg = currentConfig.copy(deviceLock = newCred)
+                            ConfigStore(ctx).update { it.copy(deviceLock = newCred) }
+                            onConfigChanged(newCfg)
+                            Toast.makeText(ctx, "Lock PIN updated", Toast.LENGTH_SHORT).show()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            Toast.makeText(ctx, "Could not update Lock PIN", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 }
-            }
-        ).show(parentFragmentManager, PinSetupDialogFragment.TAG)
+            ).show(parentFragmentManager, PinSetupDialogFragment.TAG)
+        }
     }
 
     override fun onDestroyView() {

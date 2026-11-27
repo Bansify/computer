@@ -74,19 +74,23 @@ object NotificationManagerBridge {
                 pi.send()
             }.onFailure {
                 // Fallback: try launching the app directly
+                runCatching {
+                    val pm = context.packageManager
+                    val intent = pm.getLaunchIntentForPackage(item.packageName)
+                    if (intent != null) {
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    }
+                }
+            }
+        } else {
+            runCatching {
                 val pm = context.packageManager
                 val intent = pm.getLaunchIntentForPackage(item.packageName)
                 if (intent != null) {
                     intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                     context.startActivity(intent)
                 }
-            }
-        } else {
-            val pm = context.packageManager
-            val intent = pm.getLaunchIntentForPackage(item.packageName)
-            if (intent != null) {
-                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
             }
         }
     }

@@ -469,7 +469,7 @@ class FileManagerView(
         )
         val selectedIdx = modes.indexOf(currentSort).coerceAtLeast(0)
 
-        AlertDialog.Builder(context)
+        val dlg = AlertDialog.Builder(context)
             .setTitle("Sort Files By")
             .setSingleChoiceItems(options, selectedIdx) { dialog, which ->
                 currentSort = modes[which]
@@ -477,7 +477,8 @@ class FileManagerView(
                 dialog.dismiss()
             }
             .setNegativeButton("Cancel", null)
-            .show()
+            .create()
+        showDialogSafely(dlg)
     }
 
     private fun startFileDrag(view: View, item: FileItem) {
@@ -517,7 +518,7 @@ class FileManagerView(
             setHintTextColor(0x80FFFFFF.toInt())
             setPadding(32, 24, 32, 24)
         }
-        AlertDialog.Builder(context)
+        val dlg = AlertDialog.Builder(context)
             .setTitle("Create New Folder")
             .setView(input)
             .setPositiveButton("Create") { _, _ ->
@@ -535,12 +536,13 @@ class FileManagerView(
                 }
             }
             .setNegativeButton("Cancel", null)
-            .show()
+            .create()
+        showDialogSafely(dlg)
     }
 
     private fun confirmDelete(item: FileItem) {
         val type = if (item.isDirectory) "folder" else "file"
-        AlertDialog.Builder(context)
+        val dlg = AlertDialog.Builder(context)
             .setTitle("Delete $type?")
             .setMessage("Are you sure you want to delete '${item.name}'?")
             .setPositiveButton("Delete") { _, _ ->
@@ -553,7 +555,25 @@ class FileManagerView(
                 }
             }
             .setNegativeButton("Cancel", null)
-            .show()
+            .create()
+        showDialogSafely(dlg)
+    }
+
+    private fun showDialogSafely(dialog: AlertDialog) {
+        runCatching {
+            if (context !is android.app.Activity) {
+                val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT
+                }
+                dialog.window?.setType(type)
+            }
+            dialog.show()
+        }.onFailure {
+            Toast.makeText(context, "Action unavailable in overlay window", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun openFile(file: File) {
@@ -577,9 +597,10 @@ class FileManagerView(
     }
 
     private fun formatFileSize(bytes: Long): String {
-        if (bytes < 1024) return "$bytes B"
-        val exp = (Math.log(bytes.toDouble()) / Math.log(1024.0)).toInt()
-        val pre = "KMGTPE"[exp - 1]
+        if (bytes < 1024L) return "${bytes.coerceAtLeast(0L)} B"
+        val units = "KMGTPE"
+        val exp = (Math.log(bytes.toDouble()) / Math.log(1024.0)).toInt().coerceIn(1, units.length)
+        val pre = units[exp - 1]
         return String.format(Locale.US, "%.1f %sB", bytes / Math.pow(1024.0, exp.toDouble()), pre)
     }
 

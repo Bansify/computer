@@ -54,7 +54,7 @@ class PcTaskbarPinnedAdapter(
                 rootLp.width = itemSizePx
                 binding.rootTaskbarPinned.layoutParams = rootLp
             }
-            val targetIconPx = if (iconSizePx > 0) iconSizePx else (32 * density).toInt()
+            val targetIconPx = if (iconSizePx > 0) iconSizePx else (25 * density).toInt()
             val iconLp = binding.imgTaskbarPinnedIcon.layoutParams
             iconLp.width = targetIconPx
             iconLp.height = targetIconPx

@@ -284,8 +284,10 @@ class FloatingWindowManager(
                     val containerW = if (windowContainer.width > 0) windowContainer.width else windowContainer.resources.displayMetrics.widthPixels
                     val containerH = if (windowContainer.height > 0) windowContainer.height else (windowContainer.resources.displayMetrics.heightPixels - (44 * windowContainer.resources.displayMetrics.density).toInt())
 
-                    val newX = (event.rawX + dX).coerceIn(0f, (containerW - 80).toFloat())
-                    val newY = (event.rawY + dY).coerceIn(0f, (containerH - 40).toFloat())
+                    val maxX = (containerW - 80).coerceAtLeast(0).toFloat()
+                    val maxY = (containerH - 40).coerceAtLeast(0).toFloat()
+                    val newX = (event.rawX + dX).coerceIn(0f, maxX)
+                    val newY = (event.rawY + dY).coerceIn(0f, maxY)
 
                     frame.translationX = newX
                     frame.translationY = newY

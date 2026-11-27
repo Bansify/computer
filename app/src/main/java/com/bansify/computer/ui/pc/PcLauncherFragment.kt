@@ -151,10 +151,35 @@ class PcLauncherFragment : Fragment() {
         }
     }
 
+    private fun showDialogSafely(
+        dialog: androidx.fragment.app.DialogFragment,
+        tag: String,
+        fm: androidx.fragment.app.FragmentManager = parentFragmentManager
+    ) {
+        if (!isAdded || fm.isStateSaved) return
+        if (fm.findFragmentByTag(tag) != null) return
+        runCatching { dialog.show(fm, tag) }
+    }
+
+    private fun updateConfigSafely(transform: (LauncherConfig) -> LauncherConfig) {
+        val ctx = context?.applicationContext ?: return
+        if (!isAdded || _binding == null) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                ConfigStore(ctx).update(transform)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     private fun registerStatusListeners() {
+        val ctx = context ?: return
         val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
         val stickyIntent = runCatching {
-            requireContext().registerReceiver(batteryReceiver, filter).also { batteryReceiverRegistered = true }
+            ContextCompat.registerReceiver(ctx, batteryReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+                .also { batteryReceiverRegistered = true }
         }.getOrNull()
         updateBatteryStatus(stickyIntent)
     }
@@ -197,35 +222,24 @@ class PcLauncherFragment : Fragment() {
     }
 
     private fun setupTaskbar() {
-        // Base taskbar buttons - Use app launcher icon for the Start / Home button
+        val ctx = context ?: return
+        // Far-left Start button uses our own app logo in a crisp Windows 10 Start tile
         val appIconDrawable = runCatching {
-            requireContext().packageManager.getApplicationIcon(requireContext().packageName)
-        }.getOrNull() ?: androidx.core.content.ContextCompat.getDrawable(requireContext(), R.mipmap.ic_launcher)
+            ctx.packageManager.getApplicationIcon(ctx.packageName)
+        }.getOrNull() ?: ContextCompat.getDrawable(ctx, R.mipmap.ic_launcher)
 
         val density = resources.displayMetrics.density
-        val squircleRadius = 7.5f * density
-        binding.btnStart.outlineProvider = SmoothOutlineProvider(cornerRadiusPx = squircleRadius, smoothing = 0.6f)
-        binding.btnStart.clipToOutline = true
         binding.btnStart.setImageDrawable(appIconDrawable)
-
-        binding.btnTaskbarFiles.outlineProvider = SmoothOutlineProvider(cornerRadiusPx = squircleRadius, smoothing = 0.6f)
-        binding.btnTaskbarFiles.clipToOutline = true
-
-        binding.btnTaskbarBrowser.outlineProvider = SmoothOutlineProvider(cornerRadiusPx = squircleRadius, smoothing = 0.6f)
-        binding.btnTaskbarBrowser.clipToOutline = true
-
-        binding.btnTaskbarCornerLauncher.outlineProvider = SmoothOutlineProvider(cornerRadiusPx = squircleRadius, smoothing = 0.6f)
-        binding.btnTaskbarCornerLauncher.clipToOutline = true
         binding.imgCornerLauncherIcon.setImageDrawable(appIconDrawable)
 
         binding.btnFloatingCornerTab.outlineProvider = SmoothOutlineProvider(cornerRadiusPx = 9f * density, smoothing = 0.6f)
         binding.btnFloatingCornerTab.clipToOutline = true
         binding.imgFloatingCornerIcon.setImageDrawable(appIconDrawable)
 
-        binding.imgTaskbarSearchIcon.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_SEARCH, 0xCC9AA0A6.toInt()))
-        binding.btnNotifications.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_BELL, Color.WHITE))
-        binding.imgTrayVolume.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_VOLUME, 0xFFCCCCCC.toInt()))
-        binding.imgTrayNetwork.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_WIFI, 0xFFCCCCCC.toInt()))
+        binding.imgTaskbarSearchIcon.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_SEARCH, 0xE6D8E0E8.toInt()))
+        binding.btnNotifications.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_BELL, 0xF5FFFFFF.toInt()))
+        binding.imgTrayVolume.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_VOLUME, 0xE6FFFFFF.toInt()))
+        binding.imgTrayNetwork.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_WIFI, 0xE6FFFFFF.toInt()))
 
         // Start Menu Toggle
         binding.btnStart.setOnClickListener {
@@ -250,11 +264,10 @@ class PcLauncherFragment : Fragment() {
             launchKnownApp("com.bansify.computer.webapp")
         }
 
-        // Notifications Button
+        // Notifications / Action Center Button
         binding.btnNotificationsContainer.setOnClickListener {
             closeAllFlyouts()
-            NotificationBottomSheetFragment.newInstance()
-                .show(parentFragmentManager, NotificationBottomSheetFragment.TAG)
+            showDialogSafely(NotificationBottomSheetFragment.newInstance(), NotificationBottomSheetFragment.TAG)
         }
 
         // Tray Cluster (Quick Settings Action Center)
@@ -299,7 +312,7 @@ class PcLauncherFragment : Fragment() {
             taskbarChipsRecycler = binding.recyclerTaskbarWindowChips
         )
         floatingWindowManager?.onTaskbarChanged = { hasWindows ->
-            binding.viewSepActive.visibility = if (hasWindows) View.VISIBLE else View.GONE
+            _binding?.viewSepActive?.visibility = if (hasWindows) View.VISIBLE else View.GONE
         }
         binding.recyclerTaskbarWindowChips.layoutManager = LinearLayoutManager(
             requireContext(),
@@ -352,14 +365,15 @@ class PcLauncherFragment : Fragment() {
     }
 
     private fun showUnpinPopup(app: AppEntry, anchor: View) {
-        val popup = PopupWindow(requireContext())
-        val context = requireContext()
+        val context = context ?: return
+        if (!isAdded || _binding == null || anchor.windowToken == null) return
+        val popup = PopupWindow(context)
         val density = context.resources.displayMetrics.density
 
         val container = android.widget.LinearLayout(context).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
-            background = androidx.core.content.ContextCompat.getDrawable(context, com.bansify.computer.R.drawable.bg_pc_context_menu)
+            background = ContextCompat.getDrawable(context, R.drawable.bg_pc_context_menu)
             elevation = 16f
             setPadding((12 * density).toInt(), (8 * density).toInt(), (12 * density).toInt(), (8 * density).toInt())
         }
@@ -383,10 +397,8 @@ class PcLauncherFragment : Fragment() {
         container.addView(label)
 
         container.setOnClickListener {
-            viewLifecycleOwner.lifecycleScope.launch {
-                ConfigStore(requireContext()).update { cfg ->
-                    cfg.copy(pcPinnedApps = cfg.pcPinnedApps.filter { it != app.pkg })
-                }
+            updateConfigSafely { cfg ->
+                cfg.copy(pcPinnedApps = cfg.pcPinnedApps.filter { it != app.pkg })
             }
             popup.dismiss()
         }
@@ -395,7 +407,9 @@ class PcLauncherFragment : Fragment() {
         popup.isOutsideTouchable = true
         popup.isFocusable = true
         popup.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        popup.showAsDropDown(anchor, 0, (-anchor.height - (36 * density).toInt()))
+        runCatching {
+            popup.showAsDropDown(anchor, 0, (-anchor.height - (36 * density).toInt()))
+        }
     }
 
     private fun setupStartMenuFlyout() {
@@ -482,8 +496,7 @@ class PcLauncherFragment : Fragment() {
 
         qsBinding.tileQsNotifs.setOnClickListener {
             closeAllFlyouts()
-            NotificationBottomSheetFragment.newInstance()
-                .show(parentFragmentManager, NotificationBottomSheetFragment.TAG)
+            showDialogSafely(NotificationBottomSheetFragment.newInstance(), NotificationBottomSheetFragment.TAG)
         }
 
         qsBinding.btnQsSettings.setOnClickListener {
@@ -535,12 +548,13 @@ class PcLauncherFragment : Fragment() {
     }
 
     private fun closeAllFlyouts(restoreFocus: Boolean = false) {
+        val b = _binding ?: return
         val previousFocus = flyoutReturnFocus
         flyoutReturnFocus = null
-        activePopupWindow?.dismiss()
+        runCatching { activePopupWindow?.dismiss() }
         activePopupWindow = null
-        binding.containerStartMenu.visibility = View.GONE
-        binding.containerQuickSettings.visibility = View.GONE
+        b.containerStartMenu.visibility = View.GONE
+        b.containerQuickSettings.visibility = View.GONE
         if (restoreFocus && previousFocus?.isAttachedToWindow == true && previousFocus.isShown) {
             previousFocus.requestFocus()
         }
@@ -706,6 +720,8 @@ class PcLauncherFragment : Fragment() {
     }
 
     private fun updateGridDimensions() {
+        val b = _binding ?: return
+        val ctx = context ?: return
         val density = resources.displayMetrics.density
         val displayMetrics = resources.displayMetrics
         val scale = currentConfig.pcUiScale.coerceIn(0.5f, 1.3f)
@@ -714,15 +730,15 @@ class PcLauncherFragment : Fragment() {
 
         // Item cell dimensions with scale
         val itemHeightDp = (iconSizeDp + 30) * scale
-        val effectiveTbHeightDp = currentConfig.pcTaskbarHeight.coerceIn(30, 48)
-        val taskbarHeightPx = (effectiveTbHeightDp * scale * density).toInt().coerceAtLeast((28 * density).toInt())
+        val effectiveTbHeightDp = currentConfig.pcTaskbarHeight.coerceIn(32, 48)
+        val taskbarHeightPx = (effectiveTbHeightDp * scale * density).toInt().coerceAtLeast((32 * density).toInt())
 
         // Available vertical height for desktop grid
         val screenHeightPixels = displayMetrics.heightPixels
-        val recyclerHeightPx = if (binding.recyclerDesktopGrid.height > 0) {
-            binding.recyclerDesktopGrid.height
+        val recyclerHeightPx = if (b.recyclerDesktopGrid.height > 0) {
+            b.recyclerDesktopGrid.height
         } else {
-            screenHeightPixels - taskbarHeightPx
+            (screenHeightPixels - taskbarHeightPx).coerceAtLeast(1)
         }
         val verticalPaddingDp = spacingDp * 2.0f
         val availableHeightDp = (recyclerHeightPx / density) - verticalPaddingDp
@@ -730,10 +746,10 @@ class PcLauncherFragment : Fragment() {
         // In HORIZONTAL GridLayoutManager, spanCount is the number of ROWS.
         val rowSpanCount = (availableHeightDp / itemHeightDp).toInt().coerceIn(3, 16)
 
-        val currentLm = binding.recyclerDesktopGrid.layoutManager as? GridLayoutManager
+        val currentLm = b.recyclerDesktopGrid.layoutManager as? GridLayoutManager
         if (currentLm == null || currentLm.spanCount != rowSpanCount || currentLm.orientation != RecyclerView.HORIZONTAL) {
-            binding.recyclerDesktopGrid.layoutManager = GridLayoutManager(
-                requireContext(),
+            b.recyclerDesktopGrid.layoutManager = GridLayoutManager(
+                ctx,
                 rowSpanCount,
                 RecyclerView.HORIZONTAL,
                 false
@@ -741,20 +757,24 @@ class PcLauncherFragment : Fragment() {
         }
 
         val padPx = (spacingDp * density).toInt()
-        binding.recyclerDesktopGrid.setPadding(padPx, (padPx * 1.1f).toInt(), padPx, padPx)
+        b.recyclerDesktopGrid.setPadding(padPx, (padPx * 1.1f).toInt(), padPx, padPx)
 
         // Dynamically adjust taskbar layout height
-        val tbLp = binding.layoutTaskbar.layoutParams
+        val tbLp = b.layoutTaskbar.layoutParams
         tbLp.height = taskbarHeightPx
-        binding.layoutTaskbar.layoutParams = tbLp
+        b.layoutTaskbar.layoutParams = tbLp
 
-        // Adjust Taskbar margin on recycler
-        val gridLp = binding.recyclerDesktopGrid.layoutParams as ViewGroup.MarginLayoutParams
+        // Adjust Taskbar margin on recycler and floating window container
+        val gridLp = b.recyclerDesktopGrid.layoutParams as ViewGroup.MarginLayoutParams
         gridLp.bottomMargin = taskbarHeightPx
-        binding.recyclerDesktopGrid.layoutParams = gridLp
+        b.recyclerDesktopGrid.layoutParams = gridLp
 
-        // Taskbar Center vs Left Alignment
-        val appsLp = binding.layoutTaskbarApps.layoutParams as RelativeLayout.LayoutParams
+        val winContainerLp = b.containerFloatingWindows.layoutParams as ViewGroup.MarginLayoutParams
+        winContainerLp.bottomMargin = taskbarHeightPx
+        b.containerFloatingWindows.layoutParams = winContainerLp
+
+        // Taskbar Center vs Left Alignment (Windows 10 left-aligned default)
+        val appsLp = b.layoutTaskbarApps.layoutParams as RelativeLayout.LayoutParams
         if (currentConfig.pcTaskbarCenter) {
             appsLp.removeRule(RelativeLayout.ALIGN_PARENT_START)
             appsLp.addRule(RelativeLayout.CENTER_HORIZONTAL, RelativeLayout.TRUE)
@@ -762,77 +782,77 @@ class PcLauncherFragment : Fragment() {
             appsLp.removeRule(RelativeLayout.CENTER_HORIZONTAL)
             appsLp.addRule(RelativeLayout.ALIGN_PARENT_START, RelativeLayout.TRUE)
         }
-        binding.layoutTaskbarApps.layoutParams = appsLp
+        b.layoutTaskbarApps.layoutParams = appsLp
 
-        // Adjust Taskbar button sizes proportionally to prevent oversized elements
-        val btnSizePx = (taskbarHeightPx - (6 * density)).toInt().coerceIn((30 * density).toInt(), (44 * density).toInt())
-        val btnPadPx = (1.5f * density).toInt()
+        // Authentic Windows 10 full-height taskbar tiles
+        val startWidthPx = (taskbarHeightPx * 1.06f).toInt().coerceIn((36 * density).toInt(), (52 * density).toInt())
+        val slotWidthPx = taskbarHeightPx.coerceIn((34 * density).toInt(), (48 * density).toInt())
+        val startPadPx = (taskbarHeightPx * 0.16f).toInt().coerceAtLeast((5 * density).toInt())
+        val coreIconPadPx = (taskbarHeightPx * 0.19f).toInt().coerceAtLeast((6 * density).toInt())
 
-        val startLp = binding.btnStart.layoutParams
-        startLp.width = btnSizePx
-        startLp.height = btnSizePx
-        binding.btnStart.layoutParams = startLp
-        binding.btnStart.setPadding(btnPadPx, btnPadPx, btnPadPx, btnPadPx)
+        val startLp = b.btnStart.layoutParams
+        startLp.width = startWidthPx
+        startLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+        b.btnStart.layoutParams = startLp
+        b.btnStart.setPadding(startPadPx, startPadPx, startPadPx, startPadPx)
 
         // Core app shortcuts (Files and Browser)
-        val filesLp = binding.btnTaskbarFiles.layoutParams
-        filesLp.width = btnSizePx
-        filesLp.height = btnSizePx
-        binding.btnTaskbarFiles.layoutParams = filesLp
-        binding.btnTaskbarFiles.setPadding(btnPadPx, btnPadPx, btnPadPx, btnPadPx)
+        val filesLp = b.btnTaskbarFiles.layoutParams
+        filesLp.width = slotWidthPx
+        filesLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+        b.btnTaskbarFiles.layoutParams = filesLp
+        b.btnTaskbarFiles.setPadding(coreIconPadPx, coreIconPadPx, coreIconPadPx, coreIconPadPx)
 
-        val browserLp = binding.btnTaskbarBrowser.layoutParams
-        browserLp.width = btnSizePx
-        browserLp.height = btnSizePx
-        binding.btnTaskbarBrowser.layoutParams = browserLp
-        binding.btnTaskbarBrowser.setPadding(btnPadPx, btnPadPx, btnPadPx, btnPadPx)
+        val browserLp = b.btnTaskbarBrowser.layoutParams
+        browserLp.width = slotWidthPx
+        browserLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+        b.btnTaskbarBrowser.layoutParams = browserLp
+        b.btnTaskbarBrowser.setPadding(coreIconPadPx, coreIconPadPx, coreIconPadPx, coreIconPadPx)
 
-        // Corner launcher button
-        val cornerLp = binding.btnTaskbarCornerLauncher.layoutParams
-        cornerLp.width = btnSizePx
-        cornerLp.height = btnSizePx
-        binding.btnTaskbarCornerLauncher.layoutParams = cornerLp
+        // Corner quick control button
+        val cornerLp = b.btnTaskbarCornerLauncher.layoutParams
+        cornerLp.width = (taskbarHeightPx * 0.82f).toInt().coerceIn((28 * density).toInt(), (40 * density).toInt())
+        cornerLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+        b.btnTaskbarCornerLauncher.layoutParams = cornerLp
 
-        // Adjust Taskbar search bar size - wider and spacious desktop feel
-        val searchLp = binding.btnSearch.layoutParams
-        searchLp.height = (btnSizePx * 0.92f).toInt()
-        val screenWidthPx = resources.displayMetrics.widthPixels
-        val searchWidthPx = (screenWidthPx * 0.26f).coerceIn(200f * density, 360f * density).toInt()
+        // Classic Windows 10 search box next to Start
+        val searchLp = b.btnSearch.layoutParams
+        searchLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+        val screenWidthPx = displayMetrics.widthPixels
+        val searchWidthPx = (screenWidthPx * 0.25f).coerceIn(170f * density, 320f * density).toInt()
         searchLp.width = searchWidthPx
-        binding.btnSearch.layoutParams = searchLp
+        b.btnSearch.layoutParams = searchLp
 
-        // Adjust tray buttons and cluster height
-        val trayClusterLp = binding.layoutTrayCluster.layoutParams
-        trayClusterLp.height = btnSizePx
-        binding.layoutTrayCluster.layoutParams = trayClusterLp
+        // Full-height Windows 10 system tray controls
+        val trayClusterLp = b.layoutTrayCluster.layoutParams
+        trayClusterLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+        b.layoutTrayCluster.layoutParams = trayClusterLp
 
-        val notifLp = binding.btnNotificationsContainer.layoutParams
-        notifLp.width = btnSizePx
-        notifLp.height = btnSizePx
-        binding.btnNotificationsContainer.layoutParams = notifLp
+        val notifLp = b.btnNotificationsContainer.layoutParams
+        notifLp.width = (taskbarHeightPx * 0.90f).toInt().coerceIn((32 * density).toInt(), (44 * density).toInt())
+        notifLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+        b.btnNotificationsContainer.layoutParams = notifLp
 
-        // Flyout positions offset above taskbar
-        val flyoutMarginBottomPx = taskbarHeightPx + (6 * density).toInt()
-        val startMenuLp = binding.containerStartMenu.layoutParams as FrameLayout.LayoutParams
+        // Flyout positions docked right above taskbar
+        val flyoutMarginBottomPx = taskbarHeightPx + (4 * density).toInt()
+        val startMenuLp = b.containerStartMenu.layoutParams as FrameLayout.LayoutParams
         startMenuLp.bottomMargin = flyoutMarginBottomPx
-        binding.containerStartMenu.layoutParams = startMenuLp
+        b.containerStartMenu.layoutParams = startMenuLp
 
-        val qsLp = binding.containerQuickSettings.layoutParams as FrameLayout.LayoutParams
+        val qsLp = b.containerQuickSettings.layoutParams as FrameLayout.LayoutParams
         qsLp.bottomMargin = flyoutMarginBottomPx
-        binding.containerQuickSettings.layoutParams = qsLp
+        b.containerQuickSettings.layoutParams = qsLp
 
-        // Update pinned adapter sizes to fit taskbar perfectly with square curve icons
-        val pinnedItemSizePx = btnSizePx
-        val pinnedIconSizePx = (btnSizePx * 0.82f).toInt()
+        // Update pinned adapter sizes for crisp Windows 10 taskbar icons
+        val pinnedItemSizePx = slotWidthPx
+        val pinnedIconSizePx = (taskbarHeightPx * 0.57f).toInt().coerceIn((20 * density).toInt(), (28 * density).toInt())
         pinnedAdapter?.updateSizes(pinnedItemSizePx, pinnedIconSizePx)
     }
 
     private fun saveCurrentDesktopOrder() {
         val currentItems = desktopAdapter?.getCurrentList() ?: return
         val newOrder = currentItems.map { it.pkg }
-        viewLifecycleOwner.lifecycleScope.launch {
-            ConfigStore(requireContext()).update { it.copy(pcDesktopOrder = newOrder, pcSortOrder = 0) }
-        }
+        updateConfigSafely { it.copy(pcDesktopOrder = newOrder, pcSortOrder = 0) }
     }
 
     // Windows / Linux style Desktop Context Menu
@@ -932,9 +952,7 @@ class PcLauncherFragment : Fragment() {
         // 4. Toggle Labels Option
         menuBinding.itemToggleLabels.setOnClickListener {
             popup.dismiss()
-            viewLifecycleOwner.lifecycleScope.launch {
-                ConfigStore(context).update { it.copy(pcShowLabels = !it.pcShowLabels) }
-            }
+            updateConfigSafely { it.copy(pcShowLabels = !it.pcShowLabels) }
         }
 
         // 5. Sort Icons Option
@@ -952,9 +970,7 @@ class PcLauncherFragment : Fragment() {
         // 7. Refresh Desktop Option
         menuBinding.itemRefreshDesktop.setOnClickListener {
             popup.dismiss()
-            viewLifecycleOwner.lifecycleScope.launch {
-                loadApps()
-            }
+            requestAppsRefresh()
         }
 
         // Open File Manager Window
@@ -972,13 +988,11 @@ class PcLauncherFragment : Fragment() {
         // Install Web App to Desktop
         menuBinding.itemInstallWebApp.setOnClickListener {
             popup.dismiss()
-            InstallWebAppDialog(
-                onInstalled = {
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        loadApps()
-                    }
-                }
-            ).show(childFragmentManager, "install_web_app")
+            showDialogSafely(
+                InstallWebAppDialog(onInstalled = { requestAppsRefresh() }),
+                "install_web_app",
+                childFragmentManager
+            )
         }
 
         // 8. Wallpaper / Personalize Option
@@ -1056,15 +1070,13 @@ class PcLauncherFragment : Fragment() {
                 Toast.makeText(context, "Taskbar is full on this screen. Cannot pin more apps.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            viewLifecycleOwner.lifecycleScope.launch {
-                ConfigStore(context).update { cfg ->
-                    val newPinned = if (isPinned) {
-                        cfg.pcPinnedApps.filter { it != app.pkg }
-                    } else {
-                        cfg.pcPinnedApps + app.pkg
-                    }
-                    cfg.copy(pcPinnedApps = newPinned)
+            updateConfigSafely { cfg ->
+                val newPinned = if (isPinned) {
+                    cfg.pcPinnedApps.filter { it != app.pkg }
+                } else {
+                    cfg.pcPinnedApps + app.pkg
                 }
+                cfg.copy(pcPinnedApps = newPinned)
             }
         }
 
@@ -1075,17 +1087,13 @@ class PcLauncherFragment : Fragment() {
                 appLabel = app.label,
                 currentCustomLabel = currentConfig.pcCustomLabels[app.pkg],
                 onSave = { newName ->
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        ConfigStore(context).update { cfg ->
-                            cfg.copy(pcCustomLabels = cfg.pcCustomLabels + (app.pkg to newName))
-                        }
+                    updateConfigSafely { cfg ->
+                        cfg.copy(pcCustomLabels = cfg.pcCustomLabels + (app.pkg to newName))
                     }
                 },
                 onReset = {
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        ConfigStore(context).update { cfg ->
-                            cfg.copy(pcCustomLabels = cfg.pcCustomLabels - app.pkg)
-                        }
+                    updateConfigSafely { cfg ->
+                        cfg.copy(pcCustomLabels = cfg.pcCustomLabels - app.pkg)
                     }
                 }
             )
@@ -1107,10 +1115,8 @@ class PcLauncherFragment : Fragment() {
 
         menuBinding.itemAppHide.setOnClickListener {
             popup.dismiss()
-            viewLifecycleOwner.lifecycleScope.launch {
-                ConfigStore(context).update { cfg ->
-                    cfg.copy(hidden = cfg.hidden + app.pkg)
-                }
+            updateConfigSafely { cfg ->
+                cfg.copy(hidden = cfg.hidden + app.pkg)
             }
         }
 
@@ -1129,6 +1135,8 @@ class PcLauncherFragment : Fragment() {
     }
 
     private fun showPopupAtSafeCoords(popup: PopupWindow, rawX: Float, rawY: Float, widthPx: Int, heightPx: Int) {
+        val b = _binding ?: return
+        if (!isAdded || b.pcLauncherRoot.windowToken == null) return
         val displayMetrics = resources.displayMetrics
         val screenWidth = displayMetrics.widthPixels
         val screenHeight = displayMetrics.heightPixels
@@ -1139,7 +1147,9 @@ class PcLauncherFragment : Fragment() {
         val safeX = x.coerceIn(8, (screenWidth - widthPx - 8).coerceAtLeast(8))
         val safeY = y.coerceIn(8, (screenHeight - heightPx - 48).coerceAtLeast(8))
 
-        popup.showAtLocation(binding.pcLauncherRoot, Gravity.NO_GRAVITY, safeX, safeY)
+        runCatching {
+            popup.showAtLocation(b.pcLauncherRoot, Gravity.NO_GRAVITY, safeX, safeY)
+        }
     }
 
     // Dialog: PC UI Scale Picker (Refined DPI options)
@@ -1166,9 +1176,7 @@ class PcLauncherFragment : Fragment() {
             selectedIndex = selectedIdx,
             onSelect = { opt ->
                 val scale = opt.tag as Float
-                viewLifecycleOwner.lifecycleScope.launch {
-                    ConfigStore(requireContext()).update { it.copy(pcUiScale = scale) }
-                }
+                updateConfigSafely { it.copy(pcUiScale = scale) }
             }
         )
     }
@@ -1193,9 +1201,7 @@ class PcLauncherFragment : Fragment() {
             selectedIndex = selectedIdx,
             onSelect = { opt ->
                 val size = opt.tag as Int
-                viewLifecycleOwner.lifecycleScope.launch {
-                    ConfigStore(requireContext()).update { it.copy(pcIconSize = size) }
-                }
+                updateConfigSafely { it.copy(pcIconSize = size) }
             }
         )
     }
@@ -1220,9 +1226,7 @@ class PcLauncherFragment : Fragment() {
             selectedIndex = selectedIdx,
             onSelect = { opt ->
                 val spacing = opt.tag as Int
-                viewLifecycleOwner.lifecycleScope.launch {
-                    ConfigStore(requireContext()).update { it.copy(pcGridSpacing = spacing) }
-                }
+                updateConfigSafely { it.copy(pcGridSpacing = spacing) }
             }
         )
     }
@@ -1241,9 +1245,7 @@ class PcLauncherFragment : Fragment() {
             selectedIndex = currentConfig.pcSortOrder,
             onSelect = { opt ->
                 val sort = opt.tag as Int
-                viewLifecycleOwner.lifecycleScope.launch {
-                    ConfigStore(requireContext()).update { it.copy(pcSortOrder = sort) }
-                }
+                updateConfigSafely { it.copy(pcSortOrder = sort) }
             }
         )
     }
@@ -1253,9 +1255,9 @@ class PcLauncherFragment : Fragment() {
         val options = listOf(
             PcDialogHelper.OptionItem("Slim Toolbar (34dp)", "Minimal height, maximizes screen", 34 to currentConfig.pcTaskbarCenter),
             PcDialogHelper.OptionItem("Compact Toolbar (38dp)", "Sleek modern PC taskbar", 38 to currentConfig.pcTaskbarCenter),
-            PcDialogHelper.OptionItem("Standard Toolbar (44dp)", "Standard taskbar height", 44 to currentConfig.pcTaskbarCenter),
+            PcDialogHelper.OptionItem("Standard Toolbar (44dp)", "Classic Windows 10 taskbar height", 44 to currentConfig.pcTaskbarCenter),
+            PcDialogHelper.OptionItem("Left Aligned (Windows 10)", "Classic Windows 10 left-aligned taskbar", currentConfig.pcTaskbarHeight to false),
             PcDialogHelper.OptionItem("Center Aligned (Windows 11)", "Centered taskbar apps", currentConfig.pcTaskbarHeight to true),
-            PcDialogHelper.OptionItem("Left Aligned (Classic)", "Left-aligned taskbar apps", currentConfig.pcTaskbarHeight to false),
             PcDialogHelper.OptionItem("Floating Quick Assist Icon", "Show over other apps (System Overlay)", "OVERLAY")
         )
         val selectedIdx = when {
@@ -1270,14 +1272,13 @@ class PcLauncherFragment : Fragment() {
             options = options,
             selectedIndex = selectedIdx,
             onSelect = { opt ->
+                val ctx = context ?: return@showOptionsPickerDialog
                 if (opt.tag == "OVERLAY") {
-                    if (!FloatingTaskbarService.canDrawOverlays(requireContext())) {
-                        FloatingTaskbarService.requestOverlayPermission(requireContext())
+                    if (!FloatingTaskbarService.canDrawOverlays(ctx)) {
+                        FloatingTaskbarService.requestOverlayPermission(ctx)
                     } else {
-                        viewLifecycleOwner.lifecycleScope.launch {
-                            ConfigStore(requireContext()).update {
-                                it.copy(pcOverlayTaskbarEnabled = !it.pcOverlayTaskbarEnabled)
-                            }
+                        updateConfigSafely {
+                            it.copy(pcOverlayTaskbarEnabled = !it.pcOverlayTaskbarEnabled)
                         }
                     }
                     return@showOptionsPickerDialog
@@ -1285,10 +1286,8 @@ class PcLauncherFragment : Fragment() {
                 val pair = opt.tag as? Pair<*, *>
                 val height = (pair?.first as? Int) ?: currentConfig.pcTaskbarHeight
                 val center = (pair?.second as? Boolean) ?: currentConfig.pcTaskbarCenter
-                viewLifecycleOwner.lifecycleScope.launch {
-                    ConfigStore(requireContext()).update {
-                        it.copy(pcTaskbarHeight = height, pcTaskbarCenter = center)
-                    }
+                updateConfigSafely {
+                    it.copy(pcTaskbarHeight = height, pcTaskbarCenter = center)
                 }
             }
         )
@@ -1310,17 +1309,21 @@ class PcLauncherFragment : Fragment() {
             }
             LaunchAuthorization.Decision.CHALLENGE -> {
                 val credential = currentConfig.appLock
-                PinEntryDialogFragment.newInstance(
-                    title = "App Locked",
-                    subtitle = "Enter PIN/Password to launch ${app.label}",
-                    credential = credential,
-                    isCancelable = true,
-                    onSuccess = { handleAppLaunch(app, authorized = credential) }
-                ).show(parentFragmentManager, PinEntryDialogFragment.TAG)
+                showDialogSafely(
+                    PinEntryDialogFragment.newInstance(
+                        title = "App Locked",
+                        subtitle = "Enter PIN/Password to launch ${app.label}",
+                        credential = credential,
+                        isCancelable = true,
+                        onSuccess = { handleAppLaunch(app, authorized = credential) }
+                    ),
+                    PinEntryDialogFragment.TAG
+                )
                 return
             }
             LaunchAuthorization.Decision.ALLOW -> Unit
         }
+        val ctx = context ?: return
         when {
             app.pkg == "com.bansify.computer.files" -> openFileManagerWindow()
             app.pkg == "com.bansify.computer.store" -> openStoreWindow()
@@ -1330,13 +1333,17 @@ class PcLauncherFragment : Fragment() {
                 val iconDrawable = app.icon?.let { BitmapDrawable(resources, it) }
                 openWebAppWindow(initialUrl = url, title = app.label, customIconDrawable = iconDrawable, isStandalone = isPwa)
             }
-            else -> Actions.launchApp(requireContext(), app.pkg)
+            else -> Actions.launchApp(ctx, app.pkg)
         }
     }
 
     fun openFileManagerWindow() {
         val fwm = floatingWindowManager ?: return
-        val fileView = FileManagerView(requireContext())
+        val ctx = context ?: return
+        val fileView = runCatching { FileManagerView(ctx) }.getOrElse {
+            Toast.makeText(ctx, "Unable to open File Manager", Toast.LENGTH_SHORT).show()
+            return
+        }
         fwm.openWindow(
             id = "app_files",
             title = "File Manager",
@@ -1349,19 +1356,22 @@ class PcLauncherFragment : Fragment() {
 
     fun openStoreWindow() {
         val fwm = floatingWindowManager ?: return
+        val ctx = context ?: return
+        if (!isAdded || _binding == null) return
         var storeView: GothwadStoreView? = null
-        storeView = GothwadStoreView(
-            context = requireContext(),
-            coroutineScope = viewLifecycleOwner.lifecycleScope,
-            onAppListChanged = {
-                viewLifecycleOwner.lifecycleScope.launch {
-                    loadApps()
-                }
-            },
-            onOpenWebApp = { url, _ -> launchKnownApp("pwa://$url") }
-        )
+        storeView = runCatching {
+            GothwadStoreView(
+                context = ctx,
+                coroutineScope = viewLifecycleOwner.lifecycleScope,
+                onAppListChanged = { requestAppsRefresh() },
+                onOpenWebApp = { url, _ -> launchKnownApp("pwa://$url") }
+            )
+        }.getOrElse {
+            Toast.makeText(ctx, "Unable to open Bansify Store (WebView unavailable)", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-        val windowIcon = ContextCompat.getDrawable(requireContext(), R.drawable.ic_win_store)
+        val windowIcon = ContextCompat.getDrawable(ctx, R.drawable.ic_win_store)
             ?: AppIcons.createDrawable(AppIcons.PATH_STORE, 0xFF0078D4.toInt())
 
         fwm.openWindow(
@@ -1384,15 +1394,20 @@ class PcLauncherFragment : Fragment() {
         isStandalone: Boolean = false
     ) {
         val fwm = floatingWindowManager ?: return
+        val ctx = context ?: return
+        if (!isAdded || _binding == null) return
         var webAppView: WebAppView? = null
-        webAppView = WebAppView(
-            context = requireContext(),
-            initialUrl = initialUrl,
-            isStandaloneWebApp = isStandalone,
-            onPinShortcut = {
-                viewLifecycleOwner.lifecycleScope.launch { loadApps() }
-            }
-        )
+        webAppView = runCatching {
+            WebAppView(
+                context = ctx,
+                initialUrl = initialUrl,
+                isStandaloneWebApp = isStandalone,
+                onPinShortcut = { requestAppsRefresh() }
+            )
+        }.getOrElse {
+            Toast.makeText(ctx, "Unable to open Web Browser (WebView unavailable)", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         val windowIcon = customIconDrawable ?: AppIcons.createDrawable(AppIcons.PATH_GLOBE, 0xFF60A5FA.toInt())
         val windowId = if (isStandalone) "app_pwa_${WebAppManager.getSafeId(initialUrl)}" else "app_web_${System.currentTimeMillis() % 10000}"
@@ -1447,21 +1462,27 @@ class PcLauncherFragment : Fragment() {
         if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) {
             return
         }
-        SearchDialogFragment.newInstance(
-            apps = allApps,
-            config = currentConfig,
-            onLaunch = { app -> handleAppLaunch(app) }
-        ).show(parentFragmentManager, SearchDialogFragment.TAG)
+        showDialogSafely(
+            SearchDialogFragment.newInstance(
+                apps = allApps,
+                config = currentConfig,
+                onLaunch = { app -> handleAppLaunch(app) }
+            ),
+            SearchDialogFragment.TAG
+        )
     }
 
     private fun openFullSettingsDialog(initialTab: Int = PcSettingsConstants.TAB_SYSTEM) {
         if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) {
             return
         }
-        PcSettingsDialogFragment.newInstance(
-            initialTab = initialTab,
-            onWallpaperChanged = { applyWallpaper() }
-        ).show(parentFragmentManager, PcSettingsDialogFragment.TAG)
+        showDialogSafely(
+            PcSettingsDialogFragment.newInstance(
+                initialTab = initialTab,
+                onWallpaperChanged = { applyWallpaper() }
+            ),
+            PcSettingsDialogFragment.TAG
+        )
     }
 
     private fun observeData() {
@@ -1538,8 +1559,9 @@ class PcLauncherFragment : Fragment() {
 
     private fun applyWallpaper() {
         wallpaperJob?.cancel()
+        if (!isAdded || _binding == null) return
         val config = currentConfig
-        val context = context ?: return
+        val context = context?.applicationContext ?: return
         val width = resources.displayMetrics.widthPixels.coerceIn(1, 3840)
         val height = resources.displayMetrics.heightPixels.coerceIn(1, 2160)
         val presetId = PC_WALLPAPERS[config.pcWallpaper.coerceIn(0, PC_WALLPAPERS.size - 1)].resId
@@ -1584,8 +1606,10 @@ class PcLauncherFragment : Fragment() {
                     }
                     val dateStr = SimpleDateFormat(datePattern, Locale.ENGLISH).format(now)
 
-                    binding.tvTaskbarTime.text = timeStr
-                    binding.tvTaskbarDate.text = dateStr
+                    _binding?.let { b ->
+                        b.tvTaskbarTime.text = timeStr
+                        b.tvTaskbarDate.text = dateStr
+                    }
                     delay(1000)
                 }
             }
@@ -1603,19 +1627,19 @@ class PcLauncherFragment : Fragment() {
     }
 
     private suspend fun loadAppsInternal() {
-        val scanned = try { AppRepository.scan(requireContext()).toMutableList() }
+        val ctx = context?.applicationContext ?: return
+        val scanned = try { AppRepository.scan(ctx).toMutableList() }
         catch (e: CancellationException) { throw e }
         catch (e: Exception) { mutableListOf() }
 
-        val ctx = requireContext()
-        val filesIcon = ContextCompat.getDrawable(ctx, R.drawable.ic_taskbar_files)?.toBitmap(96, 96)
-        val browserIcon = ContextCompat.getDrawable(ctx, R.drawable.ic_taskbar_browser)?.toBitmap(96, 96)
-        val storeIcon = ContextCompat.getDrawable(ctx, R.drawable.ic_win_store)?.toBitmap(96, 96)
+        val filesIcon = runCatching { ContextCompat.getDrawable(ctx, R.drawable.ic_taskbar_files)?.toBitmap(96, 96) }.getOrNull()
+        val browserIcon = runCatching { ContextCompat.getDrawable(ctx, R.drawable.ic_taskbar_browser)?.toBitmap(96, 96) }.getOrNull()
+        val storeIcon = runCatching { ContextCompat.getDrawable(ctx, R.drawable.ic_win_store)?.toBitmap(96, 96) }.getOrNull()
 
         // Inject File Manager, Web Browser, and Bansify Store if not present
         if (scanned.none { it.pkg == "com.bansify.computer.files" }) {
             scanned.add(
-                0,
+                0.coerceAtMost(scanned.size),
                 AppEntry(
                     pkg = "com.bansify.computer.files",
                     label = "File Manager",
@@ -1630,7 +1654,7 @@ class PcLauncherFragment : Fragment() {
         }
         if (scanned.none { it.pkg == "com.bansify.computer.webapp" }) {
             scanned.add(
-                1,
+                1.coerceAtMost(scanned.size),
                 AppEntry(
                     pkg = "com.bansify.computer.webapp",
                     label = "Web Browser",
@@ -1645,7 +1669,7 @@ class PcLauncherFragment : Fragment() {
         }
         if (scanned.none { it.pkg == "com.bansify.computer.store" }) {
             scanned.add(
-                2,
+                2.coerceAtMost(scanned.size),
                 AppEntry(
                     pkg = "com.bansify.computer.store",
                     label = "Bansify Store",
@@ -1670,14 +1694,16 @@ class PcLauncherFragment : Fragment() {
                 }
 
                 // Auto-fetch real icon in background if missing
-                if (!WebAppManager.hasSavedIcon(ctx, pkg) && attemptedPwaIcons.add(pkg)) {
+                if (!WebAppManager.hasSavedIcon(ctx, pkg) && attemptedPwaIcons.add(pkg) && isAdded && _binding != null) {
                     val rawUrl = pkg.removePrefix("pwa://")
                     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                        val (_, fetched) = WebAppManager.fetchFaviconAndTitle(rawUrl)
-                        if (fetched != null) {
-                            WebAppManager.saveIcon(ctx, pkg, fetched)
-                            withContext(Dispatchers.Main) {
-                                loadApps()
+                        runCatching {
+                            val (_, fetched) = WebAppManager.fetchFaviconAndTitle(rawUrl)
+                            if (fetched != null) {
+                                WebAppManager.saveIcon(ctx, pkg, fetched)
+                                withContext(Dispatchers.Main) {
+                                    if (isAdded && _binding != null) loadApps()
+                                }
                             }
                         }
                     }
@@ -1698,6 +1724,7 @@ class PcLauncherFragment : Fragment() {
             }
         }
 
+        if (!isAdded || _binding == null) return
         allApps = scanned
         updateVisibleApps()
         updatePinnedApps()
@@ -1705,6 +1732,7 @@ class PcLauncherFragment : Fragment() {
     }
 
     private fun updateVisibleApps() {
+        val b = _binding ?: return
         if (allApps.isEmpty()) return
         val visible = allApps.filter { it.pkg !in currentConfig.hidden }
 
@@ -1717,7 +1745,7 @@ class PcLauncherFragment : Fragment() {
             visible
         }
 
-        val grid = binding.recyclerDesktopGrid
+        val grid = b.recyclerDesktopGrid
         val focusedItem = grid.focusedChild
         val oldPosition = focusedItem?.let { grid.getChildAdapterPosition(it) } ?: RecyclerView.NO_POSITION
         val oldPackage = desktopAdapter?.getCurrentList()?.getOrNull(oldPosition)?.pkg
@@ -1726,14 +1754,16 @@ class PcLauncherFragment : Fragment() {
         if (oldPosition != RecyclerView.NO_POSITION) {
             val target = FocusRestorePolicy.position(sorted.map { it.pkg }, oldPackage, oldPosition)
             grid.post {
-                if (_binding != null && (grid.hasFocus() || binding.root.findFocus() == null)) {
-                    if (target == null) binding.btnStart.requestFocus()
+                val cur = _binding ?: return@post
+                if (grid.hasFocus() || cur.root.findFocus() == null) {
+                    if (target == null) cur.btnStart.requestFocus()
                     else {
                         val targetView = grid.findViewHolderForAdapterPosition(target)?.itemView
                         if (targetView == null) {
                             grid.scrollToPosition(target)
                             grid.post {
-                                if (_binding != null && (grid.hasFocus() || binding.root.findFocus() == null)) {
+                                val cur2 = _binding ?: return@post
+                                if (grid.hasFocus() || cur2.root.findFocus() == null) {
                                     grid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
                                 }
                             }
@@ -1745,13 +1775,14 @@ class PcLauncherFragment : Fragment() {
     }
 
     private fun getAvailableTaskbarPinnedWidth(): Int {
-        val recycler = binding.recyclerTaskbarPinned
+        val b = _binding ?: return 0
+        val recycler = b.recyclerTaskbarPinned
         if (recycler.width > 0) return recycler.width
         val screenW = resources.displayMetrics.widthPixels
         val density = resources.displayMetrics.density
-        val trayWidth = if (binding.layoutTaskbarTray.width > 0) binding.layoutTaskbarTray.width else (220 * density).toInt()
-        val leftNavWidth = if (binding.btnStart.width > 0 && binding.btnSearch.width > 0) {
-            binding.btnStart.width + binding.btnSearch.width + (90 * density).toInt()
+        val trayWidth = if (b.layoutTaskbarTray.width > 0) b.layoutTaskbarTray.width else (220 * density).toInt()
+        val leftNavWidth = if (b.btnStart.width > 0 && b.btnSearch.width > 0) {
+            b.btnStart.width + b.btnSearch.width + (90 * density).toInt()
         } else {
             (330 * density).toInt()
         }
@@ -1761,8 +1792,7 @@ class PcLauncherFragment : Fragment() {
     private fun canPinMoreApps(): Boolean {
         val availableW = getAvailableTaskbarPinnedWidth()
         val density = resources.displayMetrics.density
-        // Each pinned app button is 36dp with ~4dp margin = 40dp
-        val itemWidthPx = (40 * density).toInt().coerceAtLeast(1)
+        val itemWidthPx = (42 * density).toInt().coerceAtLeast(1)
         val maxFit = (availableW / itemWidthPx).coerceAtLeast(1)
         val currentPinnedCount = if (currentConfig.pcPinnedApps.isNotEmpty()) {
             currentConfig.pcPinnedApps.size
@@ -1773,7 +1803,7 @@ class PcLauncherFragment : Fragment() {
     }
 
     private fun updatePinnedApps() {
-        if (allApps.isEmpty()) return
+        if (_binding == null || allApps.isEmpty()) return
         val pinned = if (currentConfig.pcPinnedApps.isNotEmpty()) {
             currentConfig.pcPinnedApps.mapNotNull { pkg -> allApps.find { it.pkg == pkg } }
         } else {

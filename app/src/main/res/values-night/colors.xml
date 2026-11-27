@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- PC Taskbar (Dark Theme - Google Material Dark #202124) -->
-    <color name="pc_taskbar_bg">#FF202124</color>
-    <color name="pc_taskbar_border">#FF303134</color>
-    <color name="pc_taskbar_search_bg">#FF17181B</color>
-    <color name="pc_taskbar_search_text">#FF9AA0A6</color>
-    <color name="pc_taskbar_text">#FFE8EAED</color>
-    <color name="pc_taskbar_text_secondary">#FF9AA0A6</color>
-    <color name="pc_taskbar_separator">#FF303134</color>
-    <color name="pc_taskbar_btn_hover">#1AFFFFFF</color>
+    <!-- PC Taskbar (Windows 10 Dark Acrylic) -->
+    <color name="pc_taskbar_bg">#F2101318</color>
+    <color name="pc_taskbar_border">#2BFFFFFF</color>
+    <color name="pc_taskbar_search_bg">#FF232730</color>
+    <color name="pc_taskbar_search_border">#42FFFFFF</color>
+    <color name="pc_taskbar_search_text">#C2CBD4</color>
+    <color name="pc_taskbar_text">#F5FFFFFF</color>
+    <color name="pc_taskbar_text_secondary">#A6B0BC</color>
+    <color name="pc_taskbar_separator">#29FFFFFF</color>
+    <color name="pc_taskbar_btn_hover">#22FFFFFF</color>
 </resources>

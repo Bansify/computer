@@ -71,6 +71,8 @@ class WebAppView(
     private val tabs = mutableListOf<ChromeTab>()
     private var activeTabIndex = 0
     private var isDesktopSiteMode = false
+    @Volatile
+    private var isDestroyed = false
 
     private val desktopUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
     private var defaultMobileUserAgent: String = ""
@@ -172,12 +174,15 @@ class WebAppView(
         }
 
         // Shared cookies and sessions
-        val cookieManager = CookieManager.getInstance()
-        cookieManager.setAcceptCookie(true)
-        cookieManager.setAcceptThirdPartyCookies(webView, false)
+        runCatching {
+            val cookieManager = CookieManager.getInstance()
+            cookieManager.setAcceptCookie(true)
+            cookieManager.setAcceptThirdPartyCookies(webView, false)
+        }
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                if (isDestroyed) return
                 binding.webProgressBar.visibility = View.VISIBLE
                 binding.layoutWebError.visibility = View.GONE
                 url?.let {
@@ -188,6 +193,7 @@ class WebAppView(
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
+                if (isDestroyed) return
                 binding.webProgressBar.visibility = View.GONE
                 url?.let { currentUrl ->
                     val tab = tabs.firstOrNull { it.webView == view }
@@ -209,6 +215,7 @@ class WebAppView(
                 request: WebResourceRequest?,
                 error: WebResourceError?
             ) {
+                if (isDestroyed) return
                 if (request?.isForMainFrame == true) {
                     binding.webProgressBar.visibility = View.GONE
                     if (view == getActiveTab()?.webView) {
@@ -220,6 +227,7 @@ class WebAppView(
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                if (isDestroyed) return
                 if (view == getActiveTab()?.webView) {
                     binding.webProgressBar.progress = newProgress
                     if (newProgress >= 100) {
@@ -237,6 +245,7 @@ class WebAppView(
             }
 
             override fun onReceivedTitle(view: WebView?, title: String?) {
+                if (isDestroyed) return
                 val tab = tabs.firstOrNull { it.webView == view }
                 if (tab != null && !title.isNullOrEmpty()) {
                     tab.title = title
@@ -245,6 +254,7 @@ class WebAppView(
             }
 
             override fun onReceivedIcon(view: WebView?, icon: Bitmap?) {
+                if (isDestroyed) return
                 val tab = tabs.firstOrNull { it.webView == view }
                 if (tab != null && icon != null) {
                     tab.favicon = icon
@@ -264,6 +274,10 @@ class WebAppView(
             }
 
             override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                if (isDestroyed) {
+                    callback?.onCustomViewHidden()
+                    return
+                }
                 if (view != null) {
                     binding.fullscreenCustomViewContainer.addView(view)
                     binding.fullscreenCustomViewContainer.visibility = View.VISIBLE
@@ -271,6 +285,7 @@ class WebAppView(
             }
 
             override fun onHideCustomView() {
+                if (isDestroyed) return
                 binding.fullscreenCustomViewContainer.removeAllViews()
                 binding.fullscreenCustomViewContainer.visibility = View.GONE
             }
@@ -284,6 +299,16 @@ class WebAppView(
                 filePathCallback?.onReceiveValue(null)
                 Toast.makeText(context, "File uploads are not supported in this browser yet", Toast.LENGTH_SHORT).show()
                 return true
+            }
+        }
+
+        // Attach find-in-page match counter listener to every newly created tab WebView
+        webView.setFindListener { activeMatchOrdinal, numberOfMatches, _ ->
+            if (isDestroyed) return@setFindListener
+            binding.tvFindCount.text = if (numberOfMatches > 0) {
+                "${activeMatchOrdinal + 1}/$numberOfMatches"
+            } else {
+                "0/0"
             }
         }
 
@@ -756,7 +781,11 @@ class WebAppView(
             clearBrowsingData()
         }
 
-        popup.showAsDropDown(anchor, 0, 4)
+        runCatching {
+            if (anchor.windowToken != null) {
+                popup.showAsDropDown(anchor, 0, 4)
+            }
+        }
     }
 
     private fun toggleDesktopSite(enabled: Boolean) {
@@ -767,19 +796,26 @@ class WebAppView(
     }
 
     private fun shareCurrentPage() {
-        val url = getCurrentUrl()
-        val title = getTitle()
-        val sendIntent = Intent().apply {
-            action = Intent.ACTION_SEND
-            putExtra(Intent.EXTRA_TEXT, "$title\n$url")
-            type = "text/plain"
+        runCatching {
+            val url = getCurrentUrl()
+            val title = getTitle()
+            val sendIntent = Intent().apply {
+                action = Intent.ACTION_SEND
+                putExtra(Intent.EXTRA_TEXT, "$title\n$url")
+                type = "text/plain"
+            }
+            val shareIntent = Intent.createChooser(sendIntent, "Share Web Page").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(shareIntent)
+        }.onFailure {
+            Toast.makeText(context, "No app available to share", Toast.LENGTH_SHORT).show()
         }
-        val shareIntent = Intent.createChooser(sendIntent, "Share Web Page")
-        context.startActivity(shareIntent)
     }
 
     private fun openInstallWebAppDialog() {
         val act = getActivity() as? FragmentActivity ?: return
+        if (act.isFinishing || act.isDestroyed || act.supportFragmentManager.isStateSaved) return
         val url = getCurrentUrl()
         val title = getTitle()
         val icon = getFavicon()
@@ -789,22 +825,34 @@ class WebAppView(
             prefillIcon = icon,
             onInstalled = { onPinShortcut?.invoke() }
         )
-        dialog.show(act.supportFragmentManager, "install_web_app")
+        runCatching {
+            if (act.supportFragmentManager.findFragmentByTag("install_web_app") == null) {
+                dialog.show(act.supportFragmentManager, "install_web_app")
+            }
+        }
     }
 
     private fun openItemsDialog(type: String) {
         val act = getActivity() as? FragmentActivity ?: return
+        if (act.isFinishing || act.isDestroyed || act.supportFragmentManager.isStateSaved) return
         val dialog = BrowserItemsDialog(itemType = type) { selectedUrl ->
             loadUrl(selectedUrl)
         }
-        dialog.show(act.supportFragmentManager, "browser_items_$type")
+        runCatching {
+            val tag = "browser_items_$type"
+            if (act.supportFragmentManager.findFragmentByTag(tag) == null) {
+                dialog.show(act.supportFragmentManager, tag)
+            }
+        }
     }
 
     private fun clearBrowsingData() {
-        getActiveTab()?.webView?.clearCache(true)
-        WebStorage.getInstance().deleteAllData()
-        CookieManager.getInstance().removeAllCookies(null)
-        CookieManager.getInstance().flush()
+        runCatching {
+            getActiveTab()?.webView?.clearCache(true)
+            WebStorage.getInstance().deleteAllData()
+            CookieManager.getInstance().removeAllCookies(null)
+            CookieManager.getInstance().flush()
+        }
         if (dataStore.clearType("HISTORY")) {
             Toast.makeText(context, "History cleared; cookie removal requested", Toast.LENGTH_SHORT).show()
         }
@@ -860,9 +908,14 @@ class WebAppView(
     }
 
     fun destroy() {
+        isDestroyed = true
         tabs.forEach { tab ->
-            tab.webView.stopLoading()
-            tab.webView.destroy()
+            runCatching {
+                tab.webView.stopLoading()
+                tab.webView.webViewClient = WebViewClient()
+                tab.webView.webChromeClient = null
+                tab.webView.destroy()
+            }
         }
         tabs.clear()
     }

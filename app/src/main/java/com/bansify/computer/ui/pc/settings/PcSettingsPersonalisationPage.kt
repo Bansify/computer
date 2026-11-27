@@ -326,13 +326,21 @@ class PcSettingsPersonalisationPage(
 
     private fun updateConfigProperty(transform: (LauncherConfig) -> LauncherConfig) {
         scope.launch {
-            val updated = transform(config)
-            ConfigStore(context).update { updated }
-            config = updated
-            onConfigChanged?.invoke(updated)
-            setupTopPreview()
-            wallpaperAdapter?.setSelection(updated.pcWallpaper, updated.pcUseCustomWallpaper)
-            setupCards()
+            try {
+                val updated = transform(config)
+                ConfigStore(context).update { updated }
+                config = updated
+                onConfigChanged?.invoke(updated)
+                if (_binding != null) {
+                    setupTopPreview()
+                    wallpaperAdapter?.setSelection(updated.pcWallpaper, updated.pcUseCustomWallpaper)
+                    setupCards()
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                Toast.makeText(context, "Could not save setting", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

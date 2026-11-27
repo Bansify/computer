@@ -1,115 +1,269 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/search_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#D9000000"
-    android:padding="24dp">
+    android:background="@android:color/transparent">
 
+    <!-- Clickable Backdrop Scrim (Tap outside to close flyout) -->
+    <View
+        android:id="@+id/view_search_backdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#55000000"
+        android:clickable="true"
+        android:focusable="false" />
+
+    <!-- Windows 10 Start Search Flyout (Anchored bottom-left above taskbar search box) -->
     <LinearLayout
-        android:layout_width="720dp"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:background="@drawable/bg_dialog_rounded"
-        android:orientation="vertical"
-        android:padding="24dp">
+        android:id="@+id/container_search_panel"
+        android:layout_width="460dp"
+        android:layout_height="500dp"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="46dp"
+        android:layout_marginBottom="44dp"
+        android:background="@drawable/bg_win10_search_panel"
+        android:clickable="true"
+        android:elevation="24dp"
+        android:focusable="false"
+        android:orientation="vertical">
 
-        <!-- Search Input Bar -->
+        <!-- Top Filter Tabs Row (Windows 10: All | Apps | Web Apps + Close) -->
         <LinearLayout
-            android:id="@+id/container_search_bar"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:background="@drawable/bg_dialog_card"
+            android:layout_height="42dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="14dp">
+            android:paddingStart="12dp"
+            android:paddingEnd="8dp">
 
-            <ImageView
-                android:id="@+id/img_search_status_icon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:contentDescription="Search" />
-
-            <EditText
-                android:id="@+id/et_search"
-                android:layout_width="0dp"
+            <LinearLayout
+                android:id="@+id/tab_search_all"
+                android:layout_width="wrap_content"
                 android:layout_height="match_parent"
-                android:layout_marginStart="12dp"
-                android:layout_weight="1"
-                android:background="@null"
-                android:hint="@string/search_apps_hint"
-                android:imeOptions="actionSearch"
-                android:inputType="text"
-                android:singleLine="true"
-                android:textColor="#FFFFFF"
-                android:textColorHint="#66FFFFFF"
-                android:textSize="16sp" />
+                android:background="@drawable/bg_pc_taskbar_btn"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:paddingHorizontal="12dp">
 
-            <ImageButton
-                android:id="@+id/btn_clear_search"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:background="@drawable/bg_dialog_button"
-                android:contentDescription="Clear"
-                android:padding="6dp"
-                android:visibility="gone" />
+                <TextView
+                    android:id="@+id/tv_tab_all"
+                    android:layout_width="wrap_content"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="All"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12.5sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:id="@+id/ind_tab_all"
+                    android:layout_width="24dp"
+                    android:layout_height="2.5dp"
+                    android:background="#FF4FA7FA" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/tab_search_apps"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_pc_taskbar_btn"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:paddingHorizontal="12dp">
+
+                <TextView
+                    android:id="@+id/tv_tab_apps"
+                    android:layout_width="wrap_content"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="Apps"
+                    android:textColor="#9AA6B4"
+                    android:textSize="12.5sp" />
+
+                <View
+                    android:id="@+id/ind_tab_apps"
+                    android:layout_width="28dp"
+                    android:layout_height="2.5dp"
+                    android:background="#FF4FA7FA"
+                    android:visibility="invisible" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/tab_search_web"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_pc_taskbar_btn"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:paddingHorizontal="12dp">
+
+                <TextView
+                    android:id="@+id/tv_tab_web"
+                    android:layout_width="wrap_content"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="Web Apps"
+                    android:textColor="#9AA6B4"
+                    android:textSize="12.5sp" />
+
+                <View
+                    android:id="@+id/ind_tab_web"
+                    android:layout_width="42dp"
+                    android:layout_height="2.5dp"
+                    android:background="#FF4FA7FA"
+                    android:visibility="invisible" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
 
             <ImageButton
                 android:id="@+id/btn_close_search"
                 android:layout_width="32dp"
                 android:layout_height="32dp"
-                android:layout_marginStart="8dp"
-                android:background="@drawable/bg_dialog_button"
+                android:background="@drawable/bg_pc_taskbar_btn"
                 android:contentDescription="Close"
-                android:padding="6dp" />
+                android:padding="8dp" />
         </LinearLayout>
+
+        <!-- Hairline Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#1FFFFFFF" />
 
         <!-- Secret Vault Banner (Visible when secret code matched) -->
         <LinearLayout
             android:id="@+id/banner_secret_vault"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginHorizontal="14dp"
+            android:layout_marginTop="10dp"
             android:background="#26FFB300"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="14dp"
-            android:paddingVertical="8dp"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="7dp"
             android:visibility="gone">
 
             <ImageView
                 android:id="@+id/img_vault_lock"
-                android:layout_width="20dp"
-                android:layout_height="20dp"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
                 android:contentDescription="Secret Vault" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:text="Secret Vault Unlocked: Showing Hidden Apps"
+                android:text="Secret Vault Unlocked: Hidden Apps"
                 android:textColor="#FFB300"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Search Results Grid / List -->
+        <!-- Section Header ("Top apps" / "Best match") -->
+        <TextView
+            android:id="@+id/tv_search_section_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="4dp"
+            android:text="Top apps"
+            android:textColor="#9AA6B4"
+            android:textSize="11.5sp"
+            android:textStyle="bold" />
+
+        <!-- Search Results List -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recycler_search_results"
             android:layout_width="match_parent"
-            android:layout_height="320dp"
-            android:layout_marginTop="12dp" />
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:paddingHorizontal="8dp"
+            android:paddingBottom="8dp" />
 
-        <!-- Empty state text -->
+        <!-- Empty State -->
         <TextView
             android:id="@+id/tv_empty_state"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginVertical="32dp"
-            android:text="No apps found matching your search"
-            android:textColor="#66FFFFFF"
-            android:textSize="14sp"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:padding="24dp"
+            android:text="No results found"
+            android:textColor="#80FFFFFF"
+            android:textSize="13sp"
             android:visibility="gone" />
 
+        <!-- Windows 10 Bottom Search Input Bar (Docked directly above taskbar search) -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#26FFFFFF" />
+
+        <LinearLayout
+            android:id="@+id/container_search_bar"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:background="#FF232730"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingEnd="8dp">
+
+            <ImageView
+                android:id="@+id/img_search_status_icon"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:contentDescription="Search" />
+
+            <EditText
+                android:id="@+id/et_search"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:background="@null"
+                android:hint="Type here to search"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:singleLine="true"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#9AA6B4"
+                android:textSize="13sp" />
+
+            <ImageButton
+                android:id="@+id/btn_clear_search"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@drawable/bg_pc_taskbar_btn"
+                android:contentDescription="Clear"
+                android:padding="8dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Active Windows Blue Bottom Focus Accent -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:background="#FF4FA7FA" />
+
     </LinearLayout>
+
 </FrameLayout>

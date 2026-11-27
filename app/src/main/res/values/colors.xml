@@ -70,13 +70,15 @@
     <color name="wp_charcoal_2">#232526</color>
     <color name="wp_charcoal_3">#2F3437</color>
 
-    <!-- PC Taskbar (Day / Light Theme) -->
-    <color name="pc_taskbar_bg">#FFF8F9FA</color>
-    <color name="pc_taskbar_border">#FFDADCE0</color>
-    <color name="pc_taskbar_search_bg">#FFF1F3F4</color>
-    <color name="pc_taskbar_search_text">#FF5F6368</color>
-    <color name="pc_taskbar_text">#FF202124</color>
-    <color name="pc_taskbar_text_secondary">#FF5F6368</color>
-    <color name="pc_taskbar_separator">#FFDADCE0</color>
-    <color name="pc_taskbar_btn_hover">#14000000</color>
+    <!-- PC Taskbar (Windows 10 Dark Acrylic) -->
+    <color name="pc_taskbar_bg">#F2101318</color>
+    <color name="pc_taskbar_border">#2BFFFFFF</color>
+    <color name="pc_taskbar_search_bg">#FF232730</color>
+    <color name="pc_taskbar_search_border">#42FFFFFF</color>
+    <color name="pc_taskbar_search_text">#C2CBD4</color>
+    <color name="pc_taskbar_text">#F5FFFFFF</color>
+    <color name="pc_taskbar_text_secondary">#A6B0BC</color>
+    <color name="pc_taskbar_separator">#29FFFFFF</color>
+    <color name="pc_taskbar_btn_hover">#22FFFFFF</color>
+    <color name="win10_accent">#4FA7FA</color>
 </resources>

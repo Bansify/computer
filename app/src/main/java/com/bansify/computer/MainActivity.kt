@@ -234,6 +234,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startNormalDesktop() {
         if (!configReady || !GothwadApplication.hasUnlockedDeviceThisProcess) return
+        if (isFinishing || isDestroyed) return
         safeBinding = null
         binding.deviceLockContainer.removeAllViews()
         binding.deviceLockContainer.visibility = View.GONE
@@ -244,7 +245,7 @@ class MainActivity : AppCompatActivity() {
                 supportFragmentManager.beginTransaction()
                     .replace(R.id.nav_host_fragment, navHost)
                     .setPrimaryNavigationFragment(navHost)
-                    .commitNow()
+                    .commitNowAllowingStateLoss()
             }
             normalDesktopStarted = true
             startOverlayIfAllowed()
@@ -385,25 +386,33 @@ class MainActivity : AppCompatActivity() {
                     ?.returnToDesktop()
             }
             "ACTION_SEARCH" -> {
-                SearchDialogFragment.newInstance(
-                    apps = allApps,
-                    config = currentConfig,
-                    onLaunch = { app -> handleAppLaunch(app) }
-                ).show(supportFragmentManager, SearchDialogFragment.TAG)
+                showDialogSafely(
+                    SearchDialogFragment.newInstance(
+                        apps = allApps,
+                        config = currentConfig,
+                        onLaunch = { app -> handleAppLaunch(app) }
+                    ),
+                    SearchDialogFragment.TAG
+                )
             }
             "ACTION_NOTIFICATIONS" -> {
-                NotificationBottomSheetFragment.newInstance()
-                    .show(supportFragmentManager, NotificationBottomSheetFragment.TAG)
+                showDialogSafely(
+                    NotificationBottomSheetFragment.newInstance(),
+                    NotificationBottomSheetFragment.TAG
+                )
             }
             "ACTION_SETTINGS" -> {
                 openSettingsDialog()
             }
             "ACTION_QUICK_SETTINGS" -> {
-                QuickDashboardDialogFragment.newInstance(
-                    net = currentNetStatus,
-                    bt = currentBtStatus,
-                    onOpenSettings = { openSettingsDialog() }
-                ).show(supportFragmentManager, QuickDashboardDialogFragment.TAG)
+                showDialogSafely(
+                    QuickDashboardDialogFragment.newInstance(
+                        net = currentNetStatus,
+                        bt = currentBtStatus,
+                        onOpenSettings = { openSettingsDialog() }
+                    ),
+                    QuickDashboardDialogFragment.TAG
+                )
             }
             "OPEN_APP" -> {
                 val pkg = intent.getStringExtra("EXTRA_PKG")
@@ -413,14 +422,23 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showDialogSafely(dialog: androidx.fragment.app.DialogFragment, tag: String) {
+        if (isFinishing || isDestroyed || supportFragmentManager.isStateSaved) return
+        if (supportFragmentManager.findFragmentByTag(tag) != null) return
+        runCatching { dialog.show(supportFragmentManager, tag) }
+    }
+
     private fun openSettingsDialog() {
         if (!GothwadApplication.hasUnlockedDeviceThisProcess && currentConfig.deviceLock.enabled) {
             return
         }
-        PcSettingsDialogFragment.newInstance(
-            initialTab = PcSettingsConstants.TAB_SYSTEM,
-            onWallpaperChanged = { /* handled by config observer in PcLauncherFragment */ }
-        ).show(supportFragmentManager, PcSettingsDialogFragment.TAG)
+        showDialogSafely(
+            PcSettingsDialogFragment.newInstance(
+                initialTab = PcSettingsConstants.TAB_SYSTEM,
+                onWallpaperChanged = { /* handled by config observer in PcLauncherFragment */ }
+            ),
+            PcSettingsDialogFragment.TAG
+        )
     }
 
     fun requestAppLaunch(app: AppEntry) = handleAppLaunch(app)
@@ -432,13 +450,16 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "App lock configuration is incomplete; open lock settings", Toast.LENGTH_LONG).show()
             LaunchAuthorization.Decision.CHALLENGE -> {
                 val credential = currentConfig.appLock
-                PinEntryDialogFragment.newInstance(
-                    title = "App Locked",
-                    subtitle = "Enter PIN/Password to launch ${app.label}",
-                    credential = credential,
-                    isCancelable = true,
-                    onSuccess = { handleAppLaunch(app, authorized = credential) }
-                ).show(supportFragmentManager, PinEntryDialogFragment.TAG)
+                showDialogSafely(
+                    PinEntryDialogFragment.newInstance(
+                        title = "App Locked",
+                        subtitle = "Enter PIN/Password to launch ${app.label}",
+                        credential = credential,
+                        isCancelable = true,
+                        onSuccess = { handleAppLaunch(app, authorized = credential) }
+                    ),
+                    PinEntryDialogFragment.TAG
+                )
             }
             LaunchAuthorization.Decision.ALLOW -> Actions.launchApp(this, app.pkg)
         }

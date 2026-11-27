@@ -37,7 +37,8 @@ class FloatingOverlayWindowManager(private val context: Context) {
         var normalX: Int = 0,
         var normalY: Int = 0,
         var normalW: Int = 0,
-        var normalH: Int = 0
+        var normalH: Int = 0,
+        val onClose: (() -> Unit)? = null
     )
 
     fun hasActiveWindows(): Boolean = activeWindows.isNotEmpty()
@@ -54,7 +55,10 @@ class FloatingOverlayWindowManager(private val context: Context) {
             return
         }
 
-        val fileView = FileManagerView(context, initialDir)
+        val fileView = runCatching { FileManagerView(context, initialDir) }.getOrElse {
+            android.widget.Toast.makeText(context, "Unable to open File Manager", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         createFloatingWindow(
             id = id,
             title = "File Manager",
@@ -75,14 +79,18 @@ class FloatingOverlayWindowManager(private val context: Context) {
             return
         }
 
-        val webView = WebAppView(context, initialUrl = url)
+        val webView = runCatching { WebAppView(context, initialUrl = url) }.getOrElse {
+            android.widget.Toast.makeText(context, "WebView unavailable on this device", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         createFloatingWindow(
             id = id,
             title = title,
             iconDrawable = AppIcons.createDrawable(AppIcons.PATH_GLOBE, 0xFF60A5FA.toInt()),
             contentView = webView.binding.root,
             defaultWidthRatio = 0.88f,
-            defaultHeightRatio = 0.75f
+            defaultHeightRatio = 0.75f,
+            onClose = { runCatching { webView.destroy() } }
         )
     }
 
@@ -93,17 +101,22 @@ class FloatingOverlayWindowManager(private val context: Context) {
         iconDrawable: Drawable,
         contentView: View,
         defaultWidthRatio: Float = 0.85f,
-        defaultHeightRatio: Float = 0.70f
+        defaultHeightRatio: Float = 0.70f,
+        onClose: (() -> Unit)? = null
     ) {
         val displayMetrics = context.resources.displayMetrics
-        val screenW = displayMetrics.widthPixels
-        val screenH = displayMetrics.heightPixels
+        val screenW = displayMetrics.widthPixels.coerceAtLeast(200)
+        val screenH = displayMetrics.heightPixels.coerceAtLeast(200)
         val density = displayMetrics.density
 
-        val initialW = (screenW * defaultWidthRatio).toInt().coerceAtLeast((280 * density).toInt()).coerceAtMost((720 * density).toInt())
-        val initialH = (screenH * defaultHeightRatio).toInt().coerceAtLeast((320 * density).toInt()).coerceAtMost((520 * density).toInt())
-        val initialX = ((screenW - initialW) / 2).coerceAtLeast(10)
-        val initialY = ((screenH - initialH) / 3).coerceAtLeast(20)
+        val minW = (260 * density).toInt().coerceAtMost(screenW)
+        val maxW = (720 * density).toInt().coerceAtLeast(minW).coerceAtMost(screenW)
+        val minH = (260 * density).toInt().coerceAtMost(screenH)
+        val maxH = (520 * density).toInt().coerceAtLeast(minH).coerceAtMost(screenH)
+        val initialW = (screenW * defaultWidthRatio).toInt().coerceIn(minW, maxW)
+        val initialH = (screenH * defaultHeightRatio).toInt().coerceIn(minH, maxH)
+        val initialX = ((screenW - initialW) / 2).coerceAtLeast(0)
+        val initialY = ((screenH - initialH) / 3).coerceAtLeast(0)
 
         val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -149,7 +162,8 @@ class FloatingOverlayWindowManager(private val context: Context) {
             normalX = initialX,
             normalY = initialY,
             normalW = initialW,
-            normalH = initialH
+            normalH = initialH,
+            onClose = onClose
         )
 
         // Close
@@ -184,10 +198,13 @@ class FloatingOverlayWindowManager(private val context: Context) {
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (!holder.isMaximized) {
+                        val dm = context.resources.displayMetrics
+                        val maxX = (dm.widthPixels - 80).coerceAtLeast(0)
+                        val maxY = (dm.heightPixels - 80).coerceAtLeast(0)
                         val dx = (event.rawX - initialTouchX).toInt()
                         val dy = (event.rawY - initialTouchY).toInt()
-                        params.x = (initialParamX + dx).coerceIn(0, screenW - 80)
-                        params.y = (initialParamY + dy).coerceIn(0, screenH - 80)
+                        params.x = (initialParamX + dx).coerceIn(0, maxX)
+                        params.y = (initialParamY + dy).coerceIn(0, maxY)
                         holder.normalX = params.x
                         holder.normalY = params.y
                         runCatching { windowManager.updateViewLayout(frameBinding.root, params) }
@@ -210,6 +227,8 @@ class FloatingOverlayWindowManager(private val context: Context) {
         runCatching {
             windowManager.addView(frameBinding.root, params)
             activeWindows[id] = holder
+        }.onFailure {
+            runCatching { onClose?.invoke() }
         }
     }
 
@@ -282,13 +301,15 @@ class FloatingOverlayWindowManager(private val context: Context) {
         runCatching {
             windowManager.removeView(holder.frameBinding.root)
         }
+        runCatching { holder.onClose?.invoke() }
     }
 
     fun closeAll() {
-        for (holder in activeWindows.values) {
+        for (holder in activeWindows.values.toList()) {
             runCatching {
                 windowManager.removeView(holder.frameBinding.root)
             }
+            runCatching { holder.onClose?.invoke() }
         }
         activeWindows.clear()
     }

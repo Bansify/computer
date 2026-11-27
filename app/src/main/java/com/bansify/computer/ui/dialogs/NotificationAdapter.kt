@@ -1,8 +1,8 @@
 package com.bansify.computer.ui.dialogs
 
-import android.graphics.Color
 import android.text.format.DateUtils
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -27,7 +27,7 @@ class NotificationAdapter(
 
     inner class ViewHolder(private val binding: ItemNotificationBinding) : RecyclerView.ViewHolder(binding.root) {
         init {
-            binding.btnDismissNotif.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_CLOSE, Color.WHITE))
+            binding.btnDismissNotif.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_CLOSE, 0xB3FFFFFF.toInt()))
             binding.root.setOnClickListener {
                 val pos = bindingAdapterPosition
                 if (pos != RecyclerView.NO_POSITION) {
@@ -43,8 +43,11 @@ class NotificationAdapter(
         }
 
         fun bind(item: NotificationItem) {
+            binding.tvNotifAppName.text = item.appName.ifBlank { item.packageName }
             binding.tvNotifTitle.text = item.title
-            binding.tvNotifBody.text = if (item.text.isNotBlank()) item.text else item.subText.orEmpty()
+            val bodyText = if (item.text.isNotBlank()) item.text else item.subText.orEmpty()
+            binding.tvNotifBody.text = bodyText
+            binding.tvNotifBody.visibility = if (bodyText.isBlank()) View.GONE else View.VISIBLE
 
             val timeAgo = DateUtils.getRelativeTimeSpanString(
                 item.postTime,
@@ -54,10 +57,11 @@ class NotificationAdapter(
             )
             binding.tvNotifTime.text = timeAgo
 
-            if (item.nativeBitmap != null) {
-                binding.imgNotifAppIcon.setImageBitmap(item.nativeBitmap)
+            val iconBmp = item.nativeBitmap ?: item.appIcon
+            if (iconBmp != null) {
+                binding.imgNotifAppIcon.setImageBitmap(iconBmp)
             } else {
-                binding.imgNotifAppIcon.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_BELL, Color.WHITE))
+                binding.imgNotifAppIcon.setImageDrawable(AppIcons.createDrawable(AppIcons.PATH_BELL, 0xFF4FA7FA.toInt()))
             }
         }
     }

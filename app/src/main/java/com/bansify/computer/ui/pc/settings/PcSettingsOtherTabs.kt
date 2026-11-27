@@ -80,9 +80,10 @@ class PcSettingsOtherTabs(
 
         // Bluetooth Status
         val btAdapter = runCatching { BluetoothAdapter.getDefaultAdapter() }.getOrNull()
+        val btEnabled = runCatching { btAdapter?.isEnabled == true }.getOrDefault(false)
         val btStatus = when {
             btAdapter == null -> "Bluetooth hardware not detected"
-            btAdapter.isEnabled -> "Bluetooth is On • Discoverable as ${config.pcDeviceName}"
+            btEnabled -> "Bluetooth is On • Discoverable as ${config.pcDeviceName}"
             else -> "Bluetooth is Off • Click to configure"
         }
         PcSettingCardHelper.addCard(
@@ -91,7 +92,7 @@ class PcSettingsOtherTabs(
             iconRes = R.drawable.ic_win_bluetooth,
             title = "Bluetooth",
             subtitle = btStatus,
-            value = if (btAdapter?.isEnabled == true) "On" else "Off"
+            value = if (btEnabled) "On" else "Off"
         ) {
             openIntent(Settings.ACTION_BLUETOOTH_SETTINGS)
         }
@@ -271,6 +272,7 @@ class PcSettingsOtherTabs(
                 val latency = System.currentTimeMillis() - start
 
                 withContext(Dispatchers.Main) {
+                    if (!isContextAlive()) return@withContext
                     val report = if (success) {
                         "✓ Internet Connected!\nDestination: 8.8.8.8 (Google DNS)\nLatency: $latency ms\nConnection Quality: ${if (latency < 60) "Excellent" else if (latency < 150) "Good" else "Fair"}"
                     } else {
@@ -717,7 +719,8 @@ class PcSettingsOtherTabs(
 
         // Display Refresh Rate
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-        val refreshRate = wm?.defaultDisplay?.refreshRate?.toInt() ?: 60
+        @Suppress("DEPRECATION")
+        val refreshRate = runCatching { wm?.defaultDisplay?.refreshRate?.toInt() }.getOrNull() ?: 60
         PcSettingCardHelper.addCard(
             parent = container,
             context = context,
@@ -911,6 +914,7 @@ class PcSettingsOtherTabs(
                 withContext(Dispatchers.IO) {
                     kotlinx.coroutines.delay(1200)
                 }
+                if (!isContextAlive()) return@launch
                 val nowStr = SimpleDateFormat("h:mm a", Locale.ENGLISH).format(Date())
                 Toast.makeText(context, "✓ Your PC is up to date (Last checked: $nowStr)", Toast.LENGTH_LONG).show()
                 buildUpdatePage(binding)
@@ -1004,22 +1008,25 @@ class PcSettingsOtherTabs(
 
     private fun showInstalledAppsDialog() {
         scope.launch(Dispatchers.IO) {
-            val apps = AppRepository.scan(context)
+            val apps = runCatching { AppRepository.scan(context) }.getOrDefault(emptyList())
             withContext(Dispatchers.Main) {
+                if (!isContextAlive()) return@withContext
                 if (apps.isEmpty()) {
                     Toast.makeText(context, "No applications found", Toast.LENGTH_SHORT).show()
                     return@withContext
                 }
 
                 val appLabels = apps.map { it.label }
-                MaterialAlertDialogBuilder(context, R.style.Theme_LiteTV_Dialog)
-                    .setTitle("Installed Applications (${apps.size})")
-                    .setItems(appLabels.toTypedArray()) { _, which ->
-                        val selectedApp = apps[which]
-                        showAppActionDialog(selectedApp)
-                    }
-                    .setNegativeButton("Close", null)
-                    .show()
+                runCatching {
+                    MaterialAlertDialogBuilder(context, R.style.Theme_LiteTV_Dialog)
+                        .setTitle("Installed Applications (${apps.size})")
+                        .setItems(appLabels.toTypedArray()) { _, which ->
+                            val selectedApp = apps[which]
+                            showAppActionDialog(selectedApp)
+                        }
+                        .setNegativeButton("Close", null)
+                        .show()
+                }
             }
         }
     }
@@ -1070,10 +1077,14 @@ class PcSettingsOtherTabs(
                         openIntent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.pkg}"))
                     }
                     4 -> {
-                        val unIntent = Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.pkg}")).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching {
+                            val unIntent = Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.pkg}")).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(unIntent)
+                        }.onFailure {
+                            Toast.makeText(context, "Uninstall unavailable on this device", Toast.LENGTH_SHORT).show()
                         }
-                        context.startActivity(unIntent)
                     }
                 }
             }
@@ -1083,56 +1094,62 @@ class PcSettingsOtherTabs(
 
     private fun showStartupAppsDialog() {
         scope.launch(Dispatchers.IO) {
-            val apps = AppRepository.scan(context)
+            val apps = runCatching { AppRepository.scan(context) }.getOrDefault(emptyList())
             withContext(Dispatchers.Main) {
+                if (!isContextAlive()) return@withContext
                 val appLabels = apps.map { it.label }.toTypedArray()
                 val checkedItems = BooleanArray(apps.size) { i ->
                     config.pcStartupApps.contains(apps[i].pkg)
                 }
 
-                MaterialAlertDialogBuilder(context, R.style.Theme_LiteTV_Dialog)
-                    .setTitle("Configure Startup Apps")
-                    .setMultiChoiceItems(appLabels, checkedItems) { _, which, isChecked ->
-                        checkedItems[which] = isChecked
-                    }
-                    .setPositiveButton("Save") { _, _ ->
-                        val selectedPkgs = mutableSetOf<String>()
-                        checkedItems.forEachIndexed { i, checked ->
-                            if (checked) selectedPkgs.add(apps[i].pkg)
+                runCatching {
+                    MaterialAlertDialogBuilder(context, R.style.Theme_LiteTV_Dialog)
+                        .setTitle("Configure Startup Apps")
+                        .setMultiChoiceItems(appLabels, checkedItems) { _, which, isChecked ->
+                            checkedItems[which] = isChecked
                         }
-                        updateConfigProperty { it.copy(pcStartupApps = selectedPkgs) }
-                        Toast.makeText(context, "Startup apps saved (${selectedPkgs.size} apps)", Toast.LENGTH_SHORT).show()
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
+                        .setPositiveButton("Save") { _, _ ->
+                            val selectedPkgs = mutableSetOf<String>()
+                            checkedItems.forEachIndexed { i, checked ->
+                                if (checked) selectedPkgs.add(apps[i].pkg)
+                            }
+                            updateConfigProperty { it.copy(pcStartupApps = selectedPkgs) }
+                            Toast.makeText(context, "Startup apps saved (${selectedPkgs.size} apps)", Toast.LENGTH_SHORT).show()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
             }
         }
     }
 
     private fun showAppLockDialog() {
         scope.launch(Dispatchers.IO) {
-            val apps = AppRepository.scan(context)
+            val apps = runCatching { AppRepository.scan(context) }.getOrDefault(emptyList())
             withContext(Dispatchers.Main) {
+                if (!isContextAlive()) return@withContext
                 val appLabels = apps.map { it.label }.toTypedArray()
                 val checkedItems = BooleanArray(apps.size) { i ->
                     config.lockedApps.contains(apps[i].pkg)
                 }
 
-                MaterialAlertDialogBuilder(context, R.style.Theme_LiteTV_Dialog)
-                    .setTitle("App Lock (Select Apps)")
-                    .setMultiChoiceItems(appLabels, checkedItems) { _, which, isChecked ->
-                        checkedItems[which] = isChecked
-                    }
-                    .setPositiveButton("Save") { _, _ ->
-                        val selectedPkgs = mutableSetOf<String>()
-                        checkedItems.forEachIndexed { i, checked ->
-                            if (checked) selectedPkgs.add(apps[i].pkg)
+                runCatching {
+                    MaterialAlertDialogBuilder(context, R.style.Theme_LiteTV_Dialog)
+                        .setTitle("App Lock (Select Apps)")
+                        .setMultiChoiceItems(appLabels, checkedItems) { _, which, isChecked ->
+                            checkedItems[which] = isChecked
                         }
-                        updateConfigProperty { it.copy(lockedApps = selectedPkgs) }
-                        Toast.makeText(context, "Locked apps saved (${selectedPkgs.size} apps)", Toast.LENGTH_SHORT).show()
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
+                        .setPositiveButton("Save") { _, _ ->
+                            val selectedPkgs = mutableSetOf<String>()
+                            checkedItems.forEachIndexed { i, checked ->
+                                if (checked) selectedPkgs.add(apps[i].pkg)
+                            }
+                            updateConfigProperty { it.copy(lockedApps = selectedPkgs) }
+                            Toast.makeText(context, "Locked apps saved (${selectedPkgs.size} apps)", Toast.LENGTH_SHORT).show()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
             }
         }
     }
@@ -1209,12 +1226,23 @@ class PcSettingsOtherTabs(
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
+    private fun isContextAlive(): Boolean {
+        val act = context as? android.app.Activity ?: return true
+        return !act.isFinishing && !act.isDestroyed
+    }
+
     private fun updateConfigProperty(transform: (LauncherConfig) -> LauncherConfig) {
         scope.launch {
-            val updated = transform(config)
-            ConfigStore(context).update { updated }
-            config = updated
-            onConfigChanged?.invoke(updated)
+            try {
+                val updated = transform(config)
+                ConfigStore(context).update { updated }
+                config = updated
+                onConfigChanged?.invoke(updated)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                Toast.makeText(context, "Could not save setting", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

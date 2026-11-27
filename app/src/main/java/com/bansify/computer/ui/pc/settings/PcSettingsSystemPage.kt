@@ -37,6 +37,7 @@ class PcSettingsSystemPage(
     fun createView(inflater: LayoutInflater): View {
         _binding = LayoutPcSettingsSystemBinding.inflate(inflater, null, false)
         setupHeader()
+        setupDefaultLauncherBanner()
         setupCards()
         return binding.root
     }
@@ -44,7 +45,40 @@ class PcSettingsSystemPage(
     fun updateConfig(newConfig: LauncherConfig) {
         config = newConfig
         setupHeader()
+        refreshDefaultLauncherStatus()
         setupCards()
+    }
+
+    fun refreshDefaultLauncherStatus() {
+        val b = _binding ?: return
+        val isDefault = runCatching { com.bansify.computer.data.HomeSettings.isDefaultHome(context) }.getOrDefault(false)
+        b.imgDefaultLauncherIcon.setImageDrawable(
+            com.bansify.computer.ui.AppIcons.createDrawable(
+                com.bansify.computer.ui.AppIcons.PATH_HOME,
+                if (isDefault) 0xFF4ADE80.toInt() else 0xFF4FA7FA.toInt()
+            )
+        )
+        if (isDefault) {
+            b.tvDefaultLauncherTitle.text = "Default Home Launcher • Active"
+            b.tvDefaultLauncherSub.text = "Bansify Computer is set as your default desktop launcher."
+            b.btnSetDefaultLauncher.text = "Change"
+        } else {
+            b.tvDefaultLauncherTitle.text = "Set as Default Launcher"
+            b.tvDefaultLauncherSub.text = "Make Bansify Computer open automatically when you press Home."
+            b.btnSetDefaultLauncher.text = "Set Default"
+        }
+    }
+
+    private fun setupDefaultLauncherBanner() {
+        val b = _binding ?: return
+        refreshDefaultLauncherStatus()
+        val openHomePicker = View.OnClickListener {
+            if (!com.bansify.computer.data.HomeSettings.open(context)) {
+                Toast.makeText(context, R.string.safe_home_no_settings, Toast.LENGTH_SHORT).show()
+            }
+        }
+        b.btnSetDefaultLauncher.setOnClickListener(openHomePicker)
+        b.cardDefaultLauncherBanner.setOnClickListener(openHomePicker)
     }
 
     private fun setupHeader() {
@@ -166,22 +200,27 @@ class PcSettingsSystemPage(
             subtitle = "Free: ${freeGb}GB of ${totalGb}GB • Clean app cache & temp files",
             value = "Clean"
         ) {
-            val cacheSize = getCacheSizeBytes()
-            val cacheMbStr = "%.2f MB".format(cacheSize / (1024.0 * 1024.0))
-            PcSettingCardHelper.showConfirmDialog(
-                context = context,
-                title = "Clean Temporary Files",
-                message = "Current cache size: $cacheMbStr\n\nWould you like to clear cached wallpapers, web previews, and temporary files?",
-                positiveButton = "Clear Now"
-            ) {
-                scope.launch(Dispatchers.IO) {
-                    runCatching {
-                        context.cacheDir.deleteRecursively()
-                        context.externalCacheDir?.deleteRecursively()
-                    }
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Cache cleaned successfully! Freed $cacheMbStr", Toast.LENGTH_SHORT).show()
-                        setupCards()
+            scope.launch {
+                val cacheSize = withContext(Dispatchers.IO) { getCacheSizeBytes() }
+                if (_binding == null) return@launch
+                val act = context as? android.app.Activity
+                if (act != null && (act.isFinishing || act.isDestroyed)) return@launch
+                val cacheMbStr = "%.2f MB".format(cacheSize / (1024.0 * 1024.0))
+                PcSettingCardHelper.showConfirmDialog(
+                    context = context,
+                    title = "Clean Temporary Files",
+                    message = "Current cache size: $cacheMbStr\n\nWould you like to clear cached wallpapers, web previews, and temporary files?",
+                    positiveButton = "Clear Now"
+                ) {
+                    scope.launch(Dispatchers.IO) {
+                        runCatching {
+                            context.cacheDir.deleteRecursively()
+                            context.externalCacheDir?.deleteRecursively()
+                        }
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Cache cleaned successfully! Freed $cacheMbStr", Toast.LENGTH_SHORT).show()
+                            if (_binding != null) setupCards()
+                        }
                     }
                 }
             }
@@ -265,13 +304,21 @@ class PcSettingsSystemPage(
                 positiveButton = "Reset to Default"
             ) {
                 scope.launch {
-                    val defaultCfg = LauncherConfig()
-                    ConfigStore(context).update { defaultCfg }
-                    config = defaultCfg
-                    onConfigChanged?.invoke(defaultCfg)
-                    setupHeader()
-                    setupCards()
-                    Toast.makeText(context, "Settings reset to factory defaults", Toast.LENGTH_SHORT).show()
+                    try {
+                        val defaultCfg = LauncherConfig()
+                        ConfigStore(context).update { defaultCfg }
+                        config = defaultCfg
+                        onConfigChanged?.invoke(defaultCfg)
+                        if (_binding != null) {
+                            setupHeader()
+                            setupCards()
+                        }
+                        Toast.makeText(context, "Settings reset to factory defaults", Toast.LENGTH_SHORT).show()
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        Toast.makeText(context, "Could not reset settings", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -350,7 +397,11 @@ class PcSettingsSystemPage(
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
                 val pct = (progress * 100 / maxVol.coerceAtLeast(1))
                 tvVal.text = "$pct%"
-                audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, progress, 0)
+                if (fromUser) {
+                    runCatching {
+                        audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, progress, 0)
+                    }
+                }
             }
             override fun onStartTrackingTouch(sb: SeekBar?) {}
             override fun onStopTrackingTouch(sb: SeekBar?) {}
@@ -360,7 +411,7 @@ class PcSettingsSystemPage(
             .setTitle("Master Volume Control")
             .setView(view)
             .setPositiveButton("Done") { _, _ ->
-                setupCards()
+                if (_binding != null) setupCards()
             }
             .show()
     }
@@ -397,12 +448,20 @@ class PcSettingsSystemPage(
 
     private fun updateConfigProperty(transform: (LauncherConfig) -> LauncherConfig) {
         scope.launch {
-            val updated = transform(config)
-            ConfigStore(context).update { updated }
-            config = updated
-            onConfigChanged?.invoke(updated)
-            setupCards()
-            setupHeader()
+            try {
+                val updated = transform(config)
+                ConfigStore(context).update { updated }
+                config = updated
+                onConfigChanged?.invoke(updated)
+                if (_binding != null) {
+                    setupCards()
+                    setupHeader()
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                Toast.makeText(context, "Could not save setting", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

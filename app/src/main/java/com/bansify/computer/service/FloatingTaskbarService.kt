@@ -180,8 +180,11 @@ class FloatingTaskbarService : Service() {
                     val dy = (event.rawY - initialTouchY).toInt()
                     if (abs(dx) > 8 || abs(dy) > 8) {
                         isMoving = true
-                        params.x = (initialParamX + dx).coerceIn(0, screenW - (44 * density).toInt())
-                        params.y = (initialParamY + dy).coerceIn(0, screenH - (44 * density).toInt())
+                        val dm = resources.displayMetrics
+                        val maxX = (dm.widthPixels - (44 * dm.density).toInt()).coerceAtLeast(0)
+                        val maxY = (dm.heightPixels - (44 * dm.density).toInt()).coerceAtLeast(0)
+                        params.x = (initialParamX + dx).coerceIn(0, maxX)
+                        params.y = (initialParamY + dy).coerceIn(0, maxY)
                         runCatching { windowManager.updateViewLayout(triggerView, params) }
                     }
                     true
@@ -399,25 +402,31 @@ class FloatingTaskbarService : Service() {
 
         fun startIfEnabled(context: Context) {
             if (canDrawOverlays(context)) {
-                val intent = Intent(context, FloatingTaskbarService::class.java)
-                context.startService(intent)
+                runCatching {
+                    val intent = Intent(context, FloatingTaskbarService::class.java)
+                    context.startService(intent)
+                }
             }
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, FloatingTaskbarService::class.java)
-            context.stopService(intent)
+            runCatching {
+                val intent = Intent(context, FloatingTaskbarService::class.java)
+                context.stopService(intent)
+            }
         }
 
         fun requestOverlayPermission(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:${context.packageName}")
-                ).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${context.packageName}")
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
                 }
-                context.startActivity(intent)
             }
         }
     }
